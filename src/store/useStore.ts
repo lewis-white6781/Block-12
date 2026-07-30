@@ -4,11 +4,13 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { defaultPersistedState, migrate, SCHEMA_VERSION, STORAGE_KEY } from './persist';
 import type { PersistedState } from './persist';
 import type {
+  BenchmarkEntry,
   Block,
   DailyEntry,
   DayId,
   ExerciseLog,
   Phase,
+  ProgressionEvent,
   Readiness,
   SessionLog,
   SetLog,
@@ -33,6 +35,9 @@ interface StoreActions {
   /** Toggles a single-set completion marker for an untracked AM checklist item. */
   toggleAmChecklistItem: (exerciseId: string, params: StartSessionParams) => void;
   completeSession: (sessionId: string, patch?: { sessionRpe?: number; note?: string }) => void;
+  /** One entry per (date, week) pair — replaces any existing entry for that week. */
+  upsertBenchmarkEntry: (entry: BenchmarkEntry) => void;
+  addProgressionEvent: (event: ProgressionEvent) => void;
 }
 
 export type StoreState = PersistedState & StoreActions;
@@ -134,6 +139,14 @@ export const useStore = create<StoreState>()(
             },
           };
         }),
+
+      upsertBenchmarkEntry: (entry) =>
+        set((s) => ({
+          benchmarkEntries: [...s.benchmarkEntries.filter((b) => b.week !== entry.week), entry],
+        })),
+
+      addProgressionEvent: (event) =>
+        set((s) => ({ progressionEvents: [...s.progressionEvents, event] })),
     }),
     {
       name: STORAGE_KEY,

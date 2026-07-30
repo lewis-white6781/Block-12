@@ -5,7 +5,7 @@ import { useStore, findPreviousExerciseLog } from '../store/useStore';
 import { program } from '../data/program';
 import { ladders } from '../data/ladders';
 import { resolvePrescription } from '../domain/phase';
-import { placeholderSetScore } from '../domain/scoring';
+import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
 import { checkStopRule } from '../domain/analysis';
 import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
 import { formatPrescription } from '../components/ExerciseCard';
@@ -149,9 +149,18 @@ export default function SessionRunner() {
     setRestKey((k) => k + 1);
   }
 
-  const stopRuleResult = exercise
-    ? checkStopRule(exercise, loggedSets.at(-1) ?? { id: '', techniqueFlags: [], score: 0 }, undefined)
-    : null;
+  const lastLoggedSet = loggedSets.at(-1);
+  const stopRuleResult =
+    exercise && lastLoggedSet
+      ? checkStopRule({
+          exercise,
+          set: lastLoggedSet,
+          previousSetThisExercise: loggedSets.length >= 2 ? loggedSets[loggedSets.length - 2] : undefined,
+          rollingBestRaw: exerciseRollingBestRaw(sessionLogs, exercise.id, exercise.metric, sessionId),
+          week: session.week,
+          phase: session.phase,
+        })
+      : null;
 
   if (ending) {
     return (
