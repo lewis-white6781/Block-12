@@ -1,6 +1,12 @@
 // Week/phase resolution — SPEC.md section 6.1.
 import { differenceInCalendarDays, parseISO } from 'date-fns';
-import type { Exercise, Phase, Prescription } from './types';
+import type { DayId, Exercise, Phase, Prescription } from './types';
+
+const DAY_IDS: DayId[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+export function dayIdForDate(date: Date): DayId {
+  return DAY_IDS[date.getDay()];
+}
 
 function rawWeek(today: Date, blockStartDate: string): number {
   const days = differenceInCalendarDays(today, parseISO(blockStartDate));

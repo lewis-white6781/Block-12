@@ -2,7 +2,18 @@
 // Transcribed exactly. Do not invent, round, or paraphrase any prescription.
 // Where a week is not explicitly listed for an exercise, phase.ts resolves it via
 // nearest-earlier lookup (SPEC.md section 6.1 / section 5 preamble).
-import type { Exercise } from '../domain/types';
+import type { DayId, Exercise } from '../domain/types';
+
+// Section headers from SPEC.md section 5 — used for the Today screen's day title.
+export const dayTitles: Record<DayId, string> = {
+  mon: 'Primary HSPU & bent-arm push',
+  tue: 'Primary front lever',
+  wed: 'Sprints & pistol-squat legs',
+  thu: 'Deep mobility and recovery',
+  fri: 'Bent-arm pull & secondary front lever',
+  sat: 'Secondary HSPU & straight-arm push',
+  sun: 'Endurance & restoration',
+};
 
 export const program: Exercise[] = [
   // ========================================================================

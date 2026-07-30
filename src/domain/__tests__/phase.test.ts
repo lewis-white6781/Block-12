@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { phaseForWeek, resolvePrescription } from '../phase';
+import { dayIdForDate, phaseForWeek, resolvePrescription } from '../phase';
 import { program } from '../../data/program';
 import type { DayId, Phase } from '../types';
+
+describe('dayIdForDate', () => {
+  it('maps calendar dates to the right DayId', () => {
+    // 2026-07-30 is a Thursday.
+    expect(dayIdForDate(new Date(2026, 6, 30))).toBe('thu');
+    expect(dayIdForDate(new Date(2026, 6, 27))).toBe('mon');
+    expect(dayIdForDate(new Date(2026, 7, 2))).toBe('sun');
+  });
+});
 
 describe('phaseForWeek', () => {
   const expected: Record<number, Phase> = {

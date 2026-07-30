@@ -59,7 +59,7 @@ function App() {
           <Route path="/more" element={<Settings />} />
           <Route path="/review" element={<Review />} />
         </Route>
-        <Route path="/session" element={<SessionRunner />} />
+        <Route path="/session/:date/:block" element={<SessionRunner />} />
       </Routes>
     </HashRouter>
   );

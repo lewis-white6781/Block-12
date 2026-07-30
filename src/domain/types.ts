@@ -69,6 +69,8 @@ export interface SetLog {
   seconds?: number; // for holds; for 'attempts' this is the best attempt
   attempts?: number[]; // seconds per attempt
   addedKg?: number;
+  distanceM?: number; // sprint metric: metres for this rep
+  intensityPct?: number; // sprint metric: intensity % for this rep
   rpe?: number; // 6..10 in 0.5 steps
   variantId?: string; // snapshot of variant used
   assistanceTier?: number; // 0..3
