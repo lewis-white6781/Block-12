@@ -1,0 +1,21 @@
+:root {
+  --bg: #0e1116; /* near-black, slightly blue */
+  --surface: #171b22;
+  --surface-2: #1f252e;
+  --line: #2a323d;
+  --text: #e8edf2;
+  --muted: #8a96a6;
+
+  /* phase accents — the signature */
+  --calibration: #6e8ba8; /* cool slate  */
+  --accumulation: #4fa88b; /* green       */
+  --deload: #7e7bb5; /* violet      */
+  --intensification: #c9a227; /* amber       */
+  --peak: #d4553b; /* red-orange  */
+  --taper: #4f8fc0; /* blue        */
+  --test: #e8edf2; /* white       */
+
+  --warn: #e0a030;
+  --bad: #d4553b;
+  --good: #4fa88b;
+}
