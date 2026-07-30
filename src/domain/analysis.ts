@@ -1,6 +1,6 @@
 // Stop-rule check, stagnation detector, one-variable rule, tendon guardrails —
 // SPEC.md sections 6.6–6.8, 6.11.
-import { bestQualifyingScore } from './scoring';
+import { bestQualifyingScore, exerciseRollingBestRaw } from './scoring';
 import type { DatedSetScore } from './scoring';
 import type { Exercise, Ladder, Phase, ProgressionEvent, Readiness, SessionLog, SetLog, TechniqueFlag } from './types';
 
@@ -133,6 +133,41 @@ export function checkStopRule(ctx: StopRuleContext): StopRuleResult | null {
   }
 
   return null;
+}
+
+/**
+ * StopRuleBanner firings aren't persisted (they're computed live in the
+ * Runner) — Review needs them retrospectively, so this re-runs the same
+ * predicate over every set logged in the given week, in logged order.
+ */
+export function weeklyStopRuleFirings(
+  sessionLogs: Record<string, SessionLog>,
+  exercises: Exercise[],
+  week: number,
+): { exerciseId: string; result: StopRuleResult }[] {
+  const firings: { exerciseId: string; result: StopRuleResult }[] = [];
+  const weekSessions = Object.values(sessionLogs)
+    .filter((s) => s.week === week)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  for (const session of weekSessions) {
+    for (const log of session.exercises) {
+      const exercise = exercises.find((e) => e.id === log.exerciseId);
+      if (!exercise) continue;
+      for (let i = 0; i < log.sets.length; i++) {
+        const result = checkStopRule({
+          exercise,
+          set: log.sets[i],
+          previousSetThisExercise: i > 0 ? log.sets[i - 1] : undefined,
+          rollingBestRaw: exerciseRollingBestRaw(sessionLogs, exercise.id, exercise.metric, session.id),
+          week: session.week,
+          phase: session.phase,
+        });
+        if (result) firings.push({ exerciseId: exercise.id, result });
+      }
+    }
+  }
+  return firings;
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +314,26 @@ export function oneVariableWarning(
   const priorEvent = events.find((e) => e.exerciseId === exerciseId && weekOfDate(e.date) === week);
   if (!priorEvent) return null;
   return `You already changed ${priorEvent.axis} on this exercise this week. Changing two variables at once makes the result uninterpretable. Log it anyway?`;
+}
+
+/**
+ * Every ProgressionEvent beyond the first, per exercise, within the given
+ * week — i.e. every event that could only have been logged by overriding the
+ * one-variable-rule warning. "Fired flags... counts overrides" per SPEC.md 6.8.
+ */
+export function oneVariableOverrideCount(
+  events: ProgressionEvent[],
+  weekOfDate: (date: string) => number,
+  week: number,
+): number {
+  const countByExercise = new Map<string, number>();
+  for (const event of events) {
+    if (weekOfDate(event.date) !== week) continue;
+    countByExercise.set(event.exerciseId, (countByExercise.get(event.exerciseId) ?? 0) + 1);
+  }
+  let overrides = 0;
+  for (const count of countByExercise.values()) overrides += Math.max(0, count - 1);
+  return overrides;
 }
 
 // ---------------------------------------------------------------------------

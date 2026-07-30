@@ -98,11 +98,15 @@ export interface DatedSetScore {
   qualifies: boolean;
 }
 
-/** Flattens every logged set for one exercise across all sessions, oldest first. */
+/**
+ * Flattens every logged set for one exercise across all sessions, oldest
+ * first. `scoreForSet` receives the session date too, since scoring
+ * weightedReps sets needs the bodyweight rolling average as-of that date.
+ */
 export function buildExerciseHistory(
   sessionLogs: Record<string, SessionLog>,
   exerciseId: string,
-  scoreForSet: (set: SetLog) => number,
+  scoreForSet: (set: SetLog, date: string) => number,
 ): DatedSetScore[] {
   const rows: DatedSetScore[] = [];
   for (const session of Object.values(sessionLogs)) {
@@ -112,7 +116,7 @@ export function buildExerciseHistory(
       rows.push({
         date: session.date,
         week: session.week,
-        score: scoreForSet(set),
+        score: scoreForSet(set, session.date),
         qualifies: isQualifyingSet(set),
       });
     }

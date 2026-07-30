@@ -16,6 +16,7 @@ import PhaseBadge from '../components/PhaseBadge';
 import ReadinessCheckIn from '../components/ReadinessCheckIn';
 import ExerciseCard from '../components/ExerciseCard';
 import DailyEntryFields from '../components/DailyEntryFields';
+import BenchmarkForm from '../components/BenchmarkForm';
 
 export default function Today() {
   const navigate = useNavigate();
@@ -101,7 +102,12 @@ export default function Today() {
       <div className="flex-1 overflow-y-auto p-4">
         <h2 className="font-display text-lg text-text">{dayTitles[dayId]}</h2>
 
-        {amExercises.length > 0 && (
+        {isSunday && isBenchmarkWeek ? (
+          <section className="mt-4">
+            <BenchmarkForm week={week} />
+          </section>
+        ) : (
+          amExercises.length > 0 && (
           <section className="mt-4 rounded border border-line bg-surface p-3">
             <button
               type="button"
@@ -141,6 +147,7 @@ export default function Today() {
               </ul>
             )}
           </section>
+          )
         )}
 
         {mainExercises.length === 0 ? (
@@ -168,9 +175,6 @@ export default function Today() {
                 />
               ))}
             </div>
-            {isSunday && isBenchmarkWeek && (
-              <p className="mt-2 text-xs text-muted">Benchmark form — added in a later step.</p>
-            )}
             <button
               type="button"
               onClick={handleStartMain}
@@ -184,6 +188,16 @@ export default function Today() {
         <section className="mt-4 rounded border border-line bg-surface p-3">
           <DailyEntryFields date={dateStr} showSummary />
         </section>
+
+        {isSunday && (
+          <button
+            type="button"
+            onClick={() => navigate('/review')}
+            className="mt-4 min-h-11 w-full rounded border border-line text-sm text-text"
+          >
+            Open this week's Review
+          </button>
+        )}
       </div>
     </div>
   );
