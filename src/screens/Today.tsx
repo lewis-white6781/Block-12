@@ -15,6 +15,7 @@ import type { Readiness } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
 import ReadinessCheckIn from '../components/ReadinessCheckIn';
 import ExerciseCard from '../components/ExerciseCard';
+import DailyEntryFields from '../components/DailyEntryFields';
 
 export default function Today() {
   const navigate = useNavigate();
@@ -179,6 +180,10 @@ export default function Today() {
             </button>
           </section>
         )}
+
+        <section className="mt-4 rounded border border-line bg-surface p-3">
+          <DailyEntryFields date={dateStr} showSummary />
+        </section>
       </div>
     </div>
   );
