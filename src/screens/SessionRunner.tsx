@@ -1,10 +1,11 @@
 // SPEC.md section 7.2. Full-screen, no bottom tab bar.
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { parseISO } from 'date-fns';
 import { useStore, findPreviousExerciseLog } from '../store/useStore';
 import { program } from '../data/program';
 import { ladders } from '../data/ladders';
-import { resolvePrescription } from '../domain/phase';
+import { currentWeek, resolvePrescription } from '../domain/phase';
 import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
 import { checkStopRule } from '../domain/analysis';
 import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
@@ -13,6 +14,7 @@ import SetLogger, { Stepper } from '../components/SetLogger';
 import NumberPad from '../components/NumberPad';
 import RestTimer from '../components/RestTimer';
 import StopRuleBanner from '../components/StopRuleBanner';
+import ProgressionLogger from '../components/ProgressionLogger';
 
 // Rest-duration bucket per SPEC.md section 7.2 ("3–5 min for sprints, 2–3 min for
 // main strength, 90 s for accessories"). The spec names the buckets but not which
@@ -48,6 +50,9 @@ export default function SessionRunner() {
   const sessionLogs = useStore((s) => s.sessionLogs);
   const logSet = useStore((s) => s.logSet);
   const completeSession = useStore((s) => s.completeSession);
+  const settings = useStore((s) => s.settings);
+  const progressionEvents = useStore((s) => s.progressionEvents);
+  const addProgressionEvent = useStore((s) => s.addProgressionEvent);
 
   const sessionId = `${params.date}:${params.block}`;
   const session = sessionLogs[sessionId];
@@ -60,7 +65,18 @@ export default function SessionRunner() {
       .sort((a, b) => a.order - b.order);
   }, [session]);
 
-  const [index, setIndex] = useState(0);
+  // Restores the in-progress exercise on refresh: the first one whose target
+  // set count isn't yet met, or the last exercise if the session is complete.
+  const [index, setIndex] = useState(() => {
+    if (!session) return 0;
+    for (let i = 0; i < exercises.length; i++) {
+      const ex = exercises[i];
+      const log = session.exercises.find((e) => e.exerciseId === ex.id);
+      const targetSets = resolvePrescription(ex, session.week)?.sets ?? 1;
+      if (!log || log.sets.length < targetSets) return i;
+    }
+    return Math.max(0, exercises.length - 1);
+  });
   const [ending, setEnding] = useState(false);
   const [restKey, setRestKey] = useState(0);
   const [restSeconds, setRestSeconds] = useState<number | null>(null);
@@ -100,7 +116,8 @@ export default function SessionRunner() {
     setVariantId(previous?.log.sets.at(-1)?.variantId);
     setAssistanceTier(previous?.log.sets.at(-1)?.assistanceTier ?? 0);
     setFlags([]);
-    setRestSeconds(null);
+    // Deliberately doesn't reset restSeconds: SPEC.md 7.2/acceptance test 9
+    // requires the rest timer to survive navigating between exercises.
   }, [exercise?.id]);
 
   if (!session) {
@@ -213,6 +230,17 @@ export default function SessionRunner() {
         </div>
 
         <StopRuleBanner result={stopRuleResult} />
+
+        {exercise.progressionLadder.length > 0 && (
+          <ProgressionLogger
+            exercise={exercise}
+            date={session.date}
+            week={session.week}
+            progressionEvents={progressionEvents}
+            weekOfDate={(date) => currentWeek(parseISO(date), settings.blockStartDate)}
+            onSave={addProgressionEvent}
+          />
+        )}
 
         {ladder && (
           <div className="mt-3 flex gap-3 text-sm">

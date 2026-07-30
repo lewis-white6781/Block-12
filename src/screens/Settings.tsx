@@ -1,9 +1,215 @@
-// SPEC.md section 7.7 ("Settings / More" — the fifth tab bar destination).
-// Implemented in a later prompt.
-export default function Settings() {
+// SPEC.md section 7.7 ("Settings / More").
+import { useRef, useState } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
+import { useStore } from '../store/useStore';
+import {
+  defaultPersistedState,
+  downloadJSONExport,
+  downloadSetsCSV,
+  ImportError,
+  parseImportedState,
+  STORAGE_KEY,
+} from '../store/persist';
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="p-4">
-      <h1 className="font-display text-2xl">More</h1>
+    <label className="block">
+      <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
+      <div className="mt-1">{children}</div>
+    </label>
+  );
+}
+
+const inputClass =
+  'min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-base tabular-nums text-text';
+
+export default function Settings() {
+  const state = useStore();
+  const { settings, updateSettings } = state;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importErr, setImportErr] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+
+  function handleExportJSON() {
+    downloadJSONExport(state);
+  }
+
+  function handleExportCSV() {
+    downloadSetsCSV(state.sessionLogs);
+  }
+
+  function handleImportClick() {
+    setImportErr(null);
+    setImportStatus(null);
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const imported = parseImportedState(text);
+      useStore.setState(imported);
+      setImportStatus(`Imported. ${Object.keys(imported.sessionLogs).length} sessions restored.`);
+      setImportErr(null);
+    } catch (err) {
+      setImportStatus(null);
+      setImportErr(err instanceof ImportError ? err.message : 'Import failed.');
+    }
+  }
+
+  function handleResetConfirmed() {
+    useStore.setState(defaultPersistedState());
+    setConfirmingReset(false);
+  }
+
+  return (
+    <div className="p-4 pb-8">
+      <h1 className="font-display text-2xl text-text">More</h1>
+
+      <section className="mt-4 rounded border border-line bg-surface p-3">
+        <h2 className="text-xs uppercase tracking-wide text-muted">Block</h2>
+        <div className="mt-2 space-y-3">
+          <Field label="Block start date (Monday of week 1)">
+            <input
+              type="date"
+              className={inputClass}
+              value={settings.blockStartDate}
+              onChange={(e) => updateSettings({ blockStartDate: e.target.value })}
+            />
+          </Field>
+        </div>
+      </section>
+
+      <section className="mt-4 rounded border border-line bg-surface p-3">
+        <h2 className="text-xs uppercase tracking-wide text-muted">Weight & nutrition</h2>
+        <div className="mt-2 grid grid-cols-2 gap-3">
+          <Field label="Start weight (kg)">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              className={inputClass}
+              value={settings.startWeightKg}
+              onChange={(e) => updateSettings({ startWeightKg: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Target weight (kg)">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              className={inputClass}
+              value={settings.targetWeightKg}
+              onChange={(e) => updateSettings({ targetWeightKg: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Protein target low (g)">
+            <input
+              type="number"
+              inputMode="numeric"
+              className={inputClass}
+              value={settings.proteinTargetLow}
+              onChange={(e) => updateSettings({ proteinTargetLow: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Protein target high (g)">
+            <input
+              type="number"
+              inputMode="numeric"
+              className={inputClass}
+              value={settings.proteinTargetHigh}
+              onChange={(e) => updateSettings({ proteinTargetHigh: Number(e.target.value) })}
+            />
+          </Field>
+        </div>
+      </section>
+
+      <section className="mt-4 rounded border border-line bg-surface p-3">
+        <h2 className="text-xs uppercase tracking-wide text-muted">Your data</h2>
+        <p className="mt-1 text-xs text-muted">
+          Everything lives on this device only. Export regularly — this is your backup.
+        </p>
+        <div className="mt-3 space-y-2">
+          <button
+            type="button"
+            onClick={handleExportJSON}
+            className="min-h-11 w-full rounded bg-good text-base font-medium text-bg"
+          >
+            Export JSON
+          </button>
+          <button
+            type="button"
+            onClick={handleImportClick}
+            className="min-h-11 w-full rounded border border-line text-sm text-text"
+          >
+            Import JSON
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={handleFileSelected}
+          />
+          {importStatus && <p className="text-xs text-good">{importStatus}</p>}
+          {importErr && <p className="text-xs text-bad">{importErr}</p>}
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="min-h-11 w-full rounded border border-line text-sm text-text"
+          >
+            Download CSV of all sets
+          </button>
+        </div>
+      </section>
+
+      <section className="mt-4 rounded border border-bad bg-surface p-3">
+        <h2 className="text-xs uppercase tracking-wide text-muted">Danger zone</h2>
+        {!confirmingReset ? (
+          <button
+            type="button"
+            onClick={() => setConfirmingReset(true)}
+            className="mt-3 min-h-11 w-full rounded border border-bad text-sm text-bad"
+          >
+            Reset block
+          </button>
+        ) : (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-text">
+              This permanently deletes every session, entry, and setting on this device. Export
+              first if you want to keep it.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetConfirmed}
+              className="min-h-11 w-full rounded bg-bad text-base font-medium text-bg"
+            >
+              Yes, delete everything
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingReset(false)}
+              className="min-h-11 w-full rounded border border-line text-sm text-text"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-4 rounded border border-line bg-surface p-3">
+        <h2 className="text-xs uppercase tracking-wide text-muted">About</h2>
+        <p className="mt-2 text-sm text-text">BLOCK 12</p>
+        <p className="mt-1 text-xs text-muted">
+          A fixed 12-week calisthenics and cut block. Offline-first, single-user, no account, no
+          server. All data stored locally under <code>{STORAGE_KEY}</code>.
+        </p>
+      </section>
     </div>
   );
 }

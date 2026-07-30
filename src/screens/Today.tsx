@@ -11,12 +11,29 @@ import {
   phaseForWeek,
   resolvePrescription,
 } from '../domain/phase';
-import type { Readiness } from '../domain/types';
+import { weeklyRatePct } from '../domain/body';
+import {
+  elbowVolumeWarning,
+  isElbowWarningDay,
+  isShoulderWarningDay,
+  optionalRunGate,
+  shoulderVolumeWarning,
+} from '../domain/readiness';
+import type { Readiness, SessionLog } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
 import ReadinessCheckIn from '../components/ReadinessCheckIn';
 import ExerciseCard from '../components/ExerciseCard';
 import DailyEntryFields from '../components/DailyEntryFields';
 import BenchmarkForm from '../components/BenchmarkForm';
+
+/** Main-session readiness check-ins as of a date, most-recent-first (SPEC.md 6.9, 6.10). */
+function recentMainReadiness(sessionLogs: Record<string, SessionLog>, asOfDate: string, n = 3): Readiness[] {
+  return Object.values(sessionLogs)
+    .filter((s) => s.block === 'main' && s.date <= asOfDate && s.readiness)
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, n)
+    .map((s) => s.readiness as Readiness);
+}
 
 export default function Today() {
   const navigate = useNavigate();
@@ -57,6 +74,23 @@ export default function Today() {
 
   const isSunday = dayId === 'sun';
   const isBenchmarkWeek = week === 1 || week === 6 || week === 12;
+
+  const dailyEntries = useStore((s) => s.dailyEntries);
+  const recentReadiness = useMemo(
+    () => recentMainReadiness(sessionLogs, dateStr),
+    [sessionLogs, dateStr],
+  );
+  const elbowWarning = isElbowWarningDay(dayId) ? elbowVolumeWarning(recentReadiness) : null;
+  const shoulderWarning = isShoulderWarningDay(dayId) ? shoulderVolumeWarning(recentReadiness) : null;
+  const runGate =
+    dayId === 'mon'
+      ? optionalRunGate({
+          week,
+          sessionLogs,
+          recentReadiness,
+          weeklyRatePct: weeklyRatePct(Object.values(dailyEntries), dateStr),
+        })
+      : null;
 
   function handleStartMain() {
     if (mainInProgress) {
@@ -101,6 +135,38 @@ export default function Today() {
 
       <div className="flex-1 overflow-y-auto p-4">
         <h2 className="font-display text-lg text-text">{dayTitles[dayId]}</h2>
+
+        {elbowWarning && (
+          <div className="mt-3 rounded bg-warn px-3 py-2 text-sm text-bg">{elbowWarning.message}</div>
+        )}
+        {shoulderWarning && (
+          <div className="mt-3 rounded bg-warn px-3 py-2 text-sm text-bg">{shoulderWarning.message}</div>
+        )}
+
+        {runGate && week >= 3 && (
+          <section className="mt-4 rounded border border-line bg-surface p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-text">Optional second run</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  runGate.eligible ? 'bg-good text-bg' : 'bg-bad text-bg'
+                }`}
+              >
+                {runGate.eligible ? 'Go' : 'Not yet'}
+              </span>
+            </div>
+            <ul className="mt-2 space-y-1">
+              {runGate.conditions.map((c) => (
+                <li key={c.id} className="flex items-start gap-2 text-xs">
+                  <span className={c.met ? 'text-good' : 'text-bad'}>{c.met ? '✓' : '✗'}</span>
+                  <span className="text-muted">
+                    {c.label} — {c.detail}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {isSunday && isBenchmarkWeek ? (
           <section className="mt-4">
