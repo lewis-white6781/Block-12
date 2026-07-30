@@ -10,6 +10,7 @@ import {
   parseImportedState,
   STORAGE_KEY,
 } from '../store/persist';
+import { generateDemoState } from '../dev/demoSeed';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -31,6 +32,7 @@ export default function Settings() {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [demoLoaded, setDemoLoaded] = useState(false);
 
   function handleExportJSON() {
     downloadJSONExport(state);
@@ -201,6 +203,27 @@ export default function Settings() {
           </div>
         )}
       </section>
+
+      {import.meta.env.DEV && (
+        <section className="mt-4 rounded border border-line bg-surface p-3">
+          <h2 className="text-xs uppercase tracking-wide text-muted">Developer (dev build only)</h2>
+          <p className="mt-1 text-xs text-muted">
+            Seeds 6 weeks of plausible sessions, weights and calories so every chart has data.
+            Overwrites whatever is currently on this device.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              useStore.setState(generateDemoState());
+              setDemoLoaded(true);
+            }}
+            className="mt-3 min-h-11 w-full rounded border border-line text-sm text-text"
+          >
+            Load demo block
+          </button>
+          {demoLoaded && <p className="mt-2 text-xs text-good">Demo block loaded.</p>}
+        </section>
+      )}
 
       <section className="mt-4 rounded border border-line bg-surface p-3">
         <h2 className="text-xs uppercase tracking-wide text-muted">About</h2>
