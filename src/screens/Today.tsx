@@ -1,7 +1,7 @@
-// SPEC.md section 7.1.
+// SPEC.md section 7.1. Day navigation is a v1.1 addition — SPEC-V1.1.md prompt 3.
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { addDays, format, isAfter, isBefore, parseISO, subDays } from 'date-fns';
 import { useStore } from '../store/useStore';
 import { program, dayTitles } from '../data/program';
 import {
@@ -47,12 +47,29 @@ export default function Today() {
   const [showReadiness, setShowReadiness] = useState(false);
   const [amExpanded, setAmExpanded] = useState(false);
 
-  const today = startOfToday();
-  const dateStr = todayISO();
-  const dayId = dayIdForDate(today);
-  const week = currentWeek(today, settings.blockStartDate);
+  const todayDate = startOfToday();
+  const blockStartDate = parseISO(settings.blockStartDate);
+  const [selectedDate, setSelectedDate] = useState(todayDate);
+
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
+  const dayId = dayIdForDate(selectedDate);
+  const week = currentWeek(selectedDate, settings.blockStartDate);
   const phase = phaseForWeek(week);
-  const blockComplete = isBlockComplete(today, settings.blockStartDate);
+  const blockComplete = isBlockComplete(todayDate, settings.blockStartDate);
+
+  const isViewingToday = dateStr === todayISO();
+  const canGoBack = isAfter(selectedDate, blockStartDate);
+  const canGoForward = isBefore(selectedDate, todayDate);
+
+  function goToPreviousDay() {
+    setSelectedDate((d) => (isAfter(d, blockStartDate) ? subDays(d, 1) : d));
+  }
+  function goToNextDay() {
+    setSelectedDate((d) => (isBefore(d, todayDate) ? addDays(d, 1) : d));
+  }
+  function goToToday() {
+    setSelectedDate(todayDate);
+  }
 
   const amExercises = useMemo(() => exercisesFor(program, dayId, 'am', week), [dayId, week]);
   const mainExercises = useMemo(() => exercisesFor(program, dayId, 'main', week), [dayId, week]);
@@ -127,7 +144,37 @@ export default function Today() {
 
   return (
     <div className="flex h-full flex-col">
-      <PhaseBadge week={week} phase={phase} dateLabel={format(today, 'EEE d MMM')} />
+      <PhaseBadge week={week} phase={phase} dateLabel={format(selectedDate, 'EEE d MMM')} />
+
+      <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-2">
+        <button
+          type="button"
+          disabled={!canGoBack}
+          onClick={goToPreviousDay}
+          className="min-h-11 min-w-11 text-text disabled:opacity-30"
+        >
+          ←
+        </button>
+        {isViewingToday ? (
+          <span className="text-sm text-muted">Today</span>
+        ) : (
+          <button
+            type="button"
+            onClick={goToToday}
+            className="min-h-11 rounded bg-warn px-3 text-xs font-medium text-bg"
+          >
+            Viewing {format(selectedDate, 'EEE d MMM')} — tap to jump to today
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={!canGoForward}
+          onClick={goToNextDay}
+          className="min-h-11 min-w-11 text-text disabled:opacity-30"
+        >
+          →
+        </button>
+      </div>
 
       <div className="flex-1 overflow-y-auto p-4">
         <h2 className="font-display text-lg text-text">{dayTitles[dayId]}</h2>
