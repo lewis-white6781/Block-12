@@ -2,6 +2,14 @@
 // Transcribed exactly. Do not invent, round, or paraphrase any prescription.
 // Where a week is not explicitly listed for an exercise, phase.ts resolves it via
 // nearest-earlier lookup (SPEC.md section 6.1 / section 5 preamble).
+//
+// v1.1 deviation (SPEC-V1.1.md section 1, section 2): every AM exercise is now
+// `tracked: true` so AM work can be logged and scored, not just checked off.
+// Prescriptions themselves are untouched -- AM progression comes from logged
+// performance against these same constant targets, not from new programming.
+// A curated subset also carries a `progressionLadder` drawn only from
+// SPEC-V1.1.md section 2.2b's vocabulary; most AM entries intentionally have
+// none and rely solely on the section 5.9 weekly progression variable instead.
 import type { DayId, Exercise } from '../domain/types';
 
 // Section headers from SPEC.md section 5 — used for the Today screen's day title.
@@ -20,7 +28,8 @@ export const program: Exercise[] = [
   // MONDAY — Primary HSPU & bent-arm push (SPEC.md section 5.1)
   // ========================================================================
 
-  // -- AM: overhead mobility and handstand line (RPE 5–6, tracked: false except toe pulls) --
+  // -- AM: overhead mobility and handstand line (RPE 5–6). tracked: true as of
+  // v1.1 (SPEC-V1.1.md section 2) -- prescriptions unchanged from SPEC.md section 5.1. --
   {
     id: 'mon-am-wrist-extension-lean',
     name: 'Wrist-extension lean',
@@ -28,7 +37,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 1,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: ['progress shoulder travel beyond the wrist'],
     progressionLadder: [],
     stopRules: [],
@@ -43,9 +52,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 2,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: ['2 s hold, ribs down'],
-    progressionLadder: [],
+    progressionLadder: ['increasing ROM', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 3, repsLow: 6, repsHigh: 10 },
@@ -58,7 +67,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 3,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: ['alternate 5 s relaxed / 5 s active'],
     progressionLadder: [],
     stopRules: [],
@@ -73,7 +82,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 4,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -94,9 +103,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 5,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: ['elbows locked, shoulders elevated, ribs controlled'],
-    progressionLadder: [],
+    progressionLadder: ['improving line', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 3, secLow: 20, secHigh: 35 },
@@ -112,7 +121,7 @@ export const program: Exercise[] = [
     ladderId: 'handstandEntry',
     tracked: true,
     cues: ['stop each attempt while the shape is still good'],
-    progressionLadder: [],
+    progressionLadder: ['losing assistance', 'improving line'],
     stopRules: [],
     prescriptions: [
       {
@@ -238,7 +247,7 @@ export const program: Exercise[] = [
   // back-off work only, never the main strength attempt.
   // ========================================================================
 
-  // -- AM: straight-arm pulling mobility (tracked: false) --
+  // -- AM: straight-arm pulling mobility. tracked: true as of v1.1 (SPEC-V1.1.md section 2). --
   {
     id: 'tue-am-passive-ring-hang',
     name: 'Passive ring hang',
@@ -246,7 +255,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 1,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -261,7 +270,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 2,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -276,9 +285,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 3,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['increasing ROM', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 2, repsLow: 3, repsHigh: 5 },
@@ -291,9 +300,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 4,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['less band', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       {
@@ -312,7 +321,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 5,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -328,9 +337,9 @@ export const program: Exercise[] = [
     order: 6,
     metric: 'timeOnly',
     ladderId: 'frontLever',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['losing assistance', 'improving line'],
     stopRules: [],
     prescriptions: [
       {
@@ -458,7 +467,7 @@ export const program: Exercise[] = [
   // WEDNESDAY — Sprints & pistol-squat legs (SPEC.md section 5.3)
   // ========================================================================
 
-  // -- AM: lower-body mobility (tracked: false) --
+  // -- AM: lower-body mobility. tracked: true as of v1.1 (SPEC-V1.1.md section 2). --
   {
     id: 'wed-am-knee-to-wall',
     name: 'Knee-to-wall dorsiflexion',
@@ -466,7 +475,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 1,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -489,7 +498,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 2,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: ['each way'],
     progressionLadder: [],
     stopRules: [],
@@ -504,7 +513,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 3,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -519,7 +528,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 4,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -534,7 +543,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 5,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -550,9 +559,9 @@ export const program: Exercise[] = [
     order: 6,
     metric: 'timeOnly',
     ladderId: 'pistol',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['losing assistance', 'harder lever'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 2, secLow: 20, secHigh: 20, perSide: true },
@@ -679,7 +688,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 1,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -700,7 +709,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 2,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -715,9 +724,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 3,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['increasing ROM', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 3, repsLow: 6, repsHigh: 6, perSide: true },
@@ -730,7 +739,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 4,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -746,10 +755,10 @@ export const program: Exercise[] = [
     order: 5,
     metric: 'reps',
     ladderId: 'pistol',
-    tracked: false,
+    tracked: true,
     coreFunction: 'technical practice only',
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['losing assistance', 'harder lever'],
     stopRules: [],
     prescriptions: [
       {
@@ -770,7 +779,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 6,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -783,7 +792,7 @@ export const program: Exercise[] = [
   // FRIDAY — Bent-arm pull & secondary front lever (SPEC.md section 5.5)
   // ========================================================================
 
-  // -- AM: elbow and pulling preparation (tracked: false) --
+  // -- AM: elbow and pulling preparation. tracked: true as of v1.1 (SPEC-V1.1.md section 2). --
   {
     id: 'fri-am-passive-to-active-ring-hang',
     name: 'Passive-to-active ring hang',
@@ -791,7 +800,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 1,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -806,9 +815,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 2,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['losing assistance', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       {
@@ -827,7 +836,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 3,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -842,7 +851,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 4,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -863,7 +872,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 5,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -884,7 +893,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 6,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -992,7 +1001,8 @@ export const program: Exercise[] = [
   // SATURDAY — Secondary HSPU & straight-arm push (SPEC.md section 5.6)
   // ========================================================================
 
-  // -- AM: handstand control (tracked: false except toe/heel-pull attempts) --
+  // -- AM: handstand control. tracked: true as of v1.1 (SPEC-V1.1.md section 2);
+  // toe/heel-pull attempts were already tracked in v1.0. --
   {
     id: 'sat-am-wrist-lean',
     name: 'Wrist lean',
@@ -1000,7 +1010,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 1,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -1015,9 +1025,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 2,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 2, repsLow: 12, repsHigh: 12 },
@@ -1030,9 +1040,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 3,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['increasing ROM', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 2, repsLow: 8, repsHigh: 8 },
@@ -1045,9 +1055,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 4,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['improving line', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 2, secLow: 25, secHigh: 25 },
@@ -1060,9 +1070,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 5,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 2, repsLow: 6, repsHigh: 8 },
@@ -1078,7 +1088,7 @@ export const program: Exercise[] = [
     ladderId: 'handstandEntry',
     tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['losing assistance', 'improving line'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 3, repsLow: 2, repsHigh: 2 },
@@ -1191,7 +1201,8 @@ export const program: Exercise[] = [
   // instead of this AM checklist.
   // ========================================================================
 
-  // -- AM mobility benchmarks (tracked: false) --
+  // -- AM mobility benchmarks. tracked: true as of v1.1 (SPEC-V1.1.md section 2);
+  // still doubles as the weeks 1/6/12 benchmark measurement (SPEC.md section 5.9). --
   {
     id: 'sun-am-pike-position',
     name: 'Pike position',
@@ -1199,7 +1210,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 1,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -1214,7 +1225,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 2,
     metric: 'timeOnly',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -1229,7 +1240,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 3,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],
@@ -1244,9 +1255,9 @@ export const program: Exercise[] = [
     block: 'am',
     order: 4,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
-    progressionLadder: [],
+    progressionLadder: ['increasing ROM', 'more work at the same RPE'],
     stopRules: [],
     prescriptions: [
       { weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 2, repsLow: 8, repsHigh: 8 },
@@ -1259,7 +1270,7 @@ export const program: Exercise[] = [
     block: 'am',
     order: 5,
     metric: 'reps',
-    tracked: false,
+    tracked: true,
     cues: [],
     progressionLadder: [],
     stopRules: [],

@@ -86,9 +86,15 @@ describe('program totals', () => {
   it('prints and asserts the total tracked-exercise count for hand verification (SPEC.md section 11.3)', () => {
     const ids = trackedExercises.map((e) => e.id).sort();
     console.log(`Tracked exercises (${ids.length}):`, ids);
-    // SPEC.md's own prompt pack (section 11.2, Prompt 2) states 30; careful
-    // transcription of section 5 as written yields 29 — see the id list above
-    // for hand verification against SPEC.md section 5.
-    expect(ids.length).toBe(29);
+    // v1.0 baseline: SPEC.md's own prompt pack (section 11.2, Prompt 2) states
+    // 30; careful transcription of section 5 as written yields 29 (main-only
+    // tracked exercises, since AM was tracked: false except two attempts
+    // exercises) -- that 29-vs-30 discrepancy is recorded in SPEC-V1.1.md
+    // section 1's amendment table and stands unresolved as a v1.0 spec note.
+    //
+    // v1.1: every AM exercise is now tracked: true (SPEC-V1.1.md section 2),
+    // so the count is all 68 program entries (41 AM + 27 main), not just the
+    // 29 previously-tracked main + 2 AM exceptions.
+    expect(ids.length).toBe(68);
   });
 });

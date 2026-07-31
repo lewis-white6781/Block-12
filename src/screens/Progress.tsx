@@ -61,9 +61,15 @@ export default function Progress() {
   const dailyEntriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
   const todayStr = todayISO();
 
-  const trackedMainExercises = useMemo(() => program.filter((e) => e.block === 'main' && e.tracked), []);
-  const [selectedExerciseId, setSelectedExerciseId] = useState(trackedMainExercises[0]?.id ?? '');
-  const selectedExercise = trackedMainExercises.find((e) => e.id === selectedExerciseId);
+  // AM exercises are tracked as of v1.1 (SPEC-V1.1.md section 2), so the picker
+  // now spans ~70 exercises rather than 27 -- an AM/Main filter keeps it usable.
+  const [blockFilter, setBlockFilter] = useState<'main' | 'am'>('main');
+  const trackedExercises = useMemo(
+    () => program.filter((e) => e.tracked && e.block === blockFilter),
+    [blockFilter],
+  );
+  const [selectedExerciseId, setSelectedExerciseId] = useState(trackedExercises[0]?.id ?? '');
+  const selectedExercise = trackedExercises.find((e) => e.id === selectedExerciseId) ?? trackedExercises[0];
   const selectedLadder = ladderFor(selectedExercise);
 
   function bodyweightAt(date: string): number {
@@ -204,14 +210,28 @@ export default function Progress() {
       </section>
 
       <section className="mt-4 rounded border border-line bg-surface p-3">
-        <label className="block text-sm">
+        <div className="flex gap-2">
+          {(['main', 'am'] as const).map((b) => (
+            <button
+              key={b}
+              type="button"
+              onClick={() => setBlockFilter(b)}
+              className={`min-h-11 flex-1 rounded border text-sm uppercase ${
+                blockFilter === b ? 'border-text bg-surface-2 text-text' : 'border-line text-muted'
+              }`}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
+        <label className="mt-2 block text-sm">
           <span className="text-xs text-muted">Exercise</span>
           <select
-            value={selectedExerciseId}
+            value={selectedExercise?.id ?? ''}
             onChange={(e) => setSelectedExerciseId(e.target.value)}
             className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-2 text-text"
           >
-            {trackedMainExercises.map((e) => (
+            {trackedExercises.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.name}
               </option>

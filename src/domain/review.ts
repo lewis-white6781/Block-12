@@ -184,9 +184,11 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
   });
 
   // --- fired flags ---
-  const trackedMainExercises = program.filter((e) => e.block === 'main' && e.tracked);
+  // AM exercises are tracked as of v1.1 (SPEC-V1.1.md section 2), so stagnation
+  // detection and next-week suggestions now cover AM alongside Main.
+  const trackedExercises = program.filter((e) => e.tracked);
   const stagnation: StagnationResult[] = [];
-  for (const exercise of trackedMainExercises) {
+  for (const exercise of trackedExercises) {
     const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
     const history = buildExerciseHistory(sessionLogs, exercise.id, scoreForSet(exercise, ladder)).filter(
       (r) => r.date <= end,
@@ -220,7 +222,7 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
       ? (() => {
           const nw = week + 1;
           const nextPhase = phaseForWeek(nw);
-          const suggestions = trackedMainExercises
+          const suggestions = trackedExercises
             .map((exercise) => {
               const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
               const history = buildExerciseHistory(sessionLogs, exercise.id, scoreForSet(exercise, ladder)).filter(

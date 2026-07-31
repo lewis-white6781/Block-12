@@ -17,8 +17,11 @@ export function intensityFactor(effLevel: number): number {
 /**
  * Recomputes a set's score per SPEC.md 6.3. `bodyweightKg` should be the 7-day
  * rolling average as of the session date, falling back to settings.startWeightKg.
- * `distanceTime` (easy runs) has no scoring formula in the spec — treated like
- * `timeOnly` as completion-only, since neither is a scored skill exercise.
+ *
+ * `timeOnly` scores like `hold` (SPEC-V1.1.md section 2.3 / prompt 6) — AM
+ * holds are now tracked and need a real score for Progress Index and
+ * stagnation to see them. `distanceTime` (easy runs) still has no scoring
+ * formula in the spec and stays completion-only.
  */
 export function computeSetScore(
   exercise: Exercise,
@@ -29,6 +32,7 @@ export function computeSetScore(
   const factor = intensityFactor(effectiveLevelForSet(exercise, ladder, set));
   switch (exercise.metric) {
     case 'hold':
+    case 'timeOnly':
       return (set.seconds ?? 0) * factor;
     case 'reps':
       return (set.reps ?? 0) * factor;
@@ -46,7 +50,6 @@ export function computeSetScore(
       const pct = (set.intensityPct ?? 0) / 100;
       return (set.distanceM ?? 0) * pct * pct;
     }
-    case 'timeOnly':
     case 'distanceTime':
       return 0;
   }
@@ -63,9 +66,20 @@ export function est1RMrelative(bodyweightKg: number, addedKg: number, reps: numb
   return relativeLoad(bodyweightKg, addedKg) * (1 + reps / 30);
 }
 
-/** A set excluded from PR/baseline calculation: any technique flag, or RPE 10. */
+/**
+ * A set excluded from PR/baseline calculation: any technique flag, RPE 10, or
+ * no raw metric value at all. That last case covers v1.0's AM checklist
+ * completion markers (`{ techniqueFlags: [], score: 0 }`, no reps/seconds/
+ * attempts/distanceM) — pre-v1.1 data that must not silently become a
+ * baseline or trigger stagnation now that AM is scored (SPEC-V1.1.md 2.4).
+ */
 export function isQualifyingSet(set: SetLog): boolean {
-  return set.techniqueFlags.length === 0 && set.rpe !== 10;
+  const hasRawValue =
+    set.reps !== undefined ||
+    set.seconds !== undefined ||
+    (set.attempts?.length ?? 0) > 0 ||
+    set.distanceM !== undefined;
+  return hasRawValue && set.techniqueFlags.length === 0 && set.rpe !== 10;
 }
 
 /** sessionLoad = Σ set scores (no exclusions — this is total work done). */
@@ -155,7 +169,7 @@ export function exerciseProgressIndex(history: DatedSetScore[]): number | null {
 
 /** The raw reps/seconds value SPEC.md 6.6's "≥15% below rolling best" compares against. */
 function rawMetricValue(set: SetLog, metric: Exercise['metric']): number | undefined {
-  if (metric === 'hold' || metric === 'attempts') return set.seconds;
+  if (metric === 'hold' || metric === 'attempts' || metric === 'timeOnly') return set.seconds;
   if (metric === 'reps' || metric === 'weightedReps' || metric === 'distanceTime') return set.reps;
   return undefined;
 }

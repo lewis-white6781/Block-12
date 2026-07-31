@@ -32,14 +32,15 @@ function restSecondsFor(exercise: Exercise): number {
 
 function formatLastTime(sets: SetLog[], metric: Exercise['metric'], unit: WeightUnit): string {
   if (sets.length === 0) return '—';
-  if (metric === 'hold' || metric === 'attempts') return sets.map((s) => s.seconds ?? '—').join(',') + 's';
+  if (metric === 'hold' || metric === 'timeOnly' || metric === 'attempts')
+    return sets.map((s) => s.seconds ?? '—').join(',') + 's';
   const reps = sets.map((s) => s.reps ?? '—').join(',');
   const kg = sets[sets.length - 1]?.addedKg;
   return kg ? `${reps} @ +${convertWeight(kg, unit).toFixed(1)} ${unit}` : reps;
 }
 
 function formatLoggedSet(set: SetLog, metric: Exercise['metric']): string {
-  if (metric === 'hold') return `${set.seconds ?? '—'}s`;
+  if (metric === 'hold' || metric === 'timeOnly') return `${set.seconds ?? '—'}s`;
   if (metric === 'attempts') return `${(set.attempts ?? []).join(',')}s`;
   if (metric === 'sprint') return `${set.distanceM ?? '—'}m @${set.intensityPct ?? '—'}%`;
   if (metric === 'distanceTime') return `${set.reps ?? '—'} min`;
@@ -136,6 +137,7 @@ export default function SessionRunner() {
     let setLog: SetLog;
     switch (exercise.metric) {
       case 'hold':
+      case 'timeOnly':
         setLog = { ...base, seconds, score: placeholderSetScore({ seconds }) };
         break;
       case 'attempts':

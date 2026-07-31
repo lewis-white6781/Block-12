@@ -111,7 +111,10 @@ export function checkStopRule(ctx: StopRuleContext): StopRuleResult | null {
     return { severity: 'red', message: 'Two collapses. Stop balance work today.' };
   }
 
-  const raw = exercise.metric === 'hold' || exercise.metric === 'attempts' ? set.seconds : set.reps;
+  const raw =
+    exercise.metric === 'hold' || exercise.metric === 'attempts' || exercise.metric === 'timeOnly'
+      ? set.seconds
+      : set.reps;
   if (rollingBestRaw !== null && rollingBestRaw > 0 && raw !== undefined && raw <= rollingBestRaw * 0.85) {
     return { severity: 'amber', message: 'Quality drop. Plan says end this exercise.' };
   }

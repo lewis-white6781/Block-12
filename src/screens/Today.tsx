@@ -21,6 +21,7 @@ import {
   optionalRunGate,
   shoulderVolumeWarning,
 } from '../domain/readiness';
+import { doNotProgressConditions, weeklyProgressionVariables } from '../data/mobility';
 import type { Readiness, SessionLog } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
 import ReadinessCheckIn from '../components/ReadinessCheckIn';
@@ -42,10 +43,8 @@ export default function Today() {
   const settings = useStore((s) => s.settings);
   const sessionLogs = useStore((s) => s.sessionLogs);
   const startSession = useStore((s) => s.startSession);
-  const toggleAmChecklistItem = useStore((s) => s.toggleAmChecklistItem);
 
   const [showReadiness, setShowReadiness] = useState(false);
-  const [amExpanded, setAmExpanded] = useState(false);
 
   const todayDate = startOfToday();
   const blockStartDate = parseISO(settings.blockStartDate);
@@ -75,18 +74,14 @@ export default function Today() {
   const mainExercises = useMemo(() => exercisesFor(program, dayId, 'main', week), [dayId, week]);
 
   const amSession = sessionLogs[`${dateStr}:am`];
-  const amDoneIds = new Set(
-    (amSession?.exercises ?? []).filter((e) => e.sets.length > 0).map((e) => e.exerciseId),
-  );
-  const amDoneCount = amExercises.filter((e) => amDoneIds.has(e.id)).length;
-  const amAllDone = amExercises.length > 0 && amDoneCount === amExercises.length;
-  const amCollapsed = amAllDone && !amExpanded;
+  const amInProgress = !!amSession && !amSession.completedAt;
 
   const mainSession = sessionLogs[`${dateStr}:main`];
   const mainInProgress = !!mainSession && !mainSession.completedAt;
 
   const isSunday = dayId === 'sun';
   const isBenchmarkWeek = week === 1 || week === 6 || week === 12;
+  const mobilityVariable = weeklyProgressionVariables.find((v) => v.week === week)?.description ?? null;
 
   const dailyEntries = useStore((s) => s.dailyEntries);
   const recentReadiness = useMemo(
@@ -104,6 +99,13 @@ export default function Today() {
           weeklyRatePct: weeklyRatePct(Object.values(dailyEntries), dateStr),
         })
       : null;
+
+  function handleStartAm() {
+    // No readiness gate for AM (SPEC.md 7.1 reserves that check-in for Main);
+    // startSession is idempotent, so this doubles as "resume" once a session exists.
+    startSession({ date: dateStr, block: 'am', day: dayId, week, phase });
+    navigate(`/session/${dateStr}/am`);
+  }
 
   function handleStartMain() {
     if (mainInProgress) {
@@ -217,45 +219,49 @@ export default function Today() {
           </section>
         ) : (
           amExercises.length > 0 && (
-          <section className="mt-4 rounded border border-line bg-surface p-3">
-            <button
-              type="button"
-              className="flex w-full min-h-11 items-center justify-between text-left"
-              onClick={() => setAmExpanded((v) => !v)}
-            >
-              <span className="text-sm text-text">AM · {dayTitles[dayId]}</span>
-              <span className="tabular-nums text-muted">
-                {amDoneCount}/{amExercises.length} {amAllDone ? '✓' : ''}
-              </span>
-            </button>
-            {!amCollapsed && (
-              <ul className="mt-2 space-y-1">
-                {amExercises.map((exercise) => {
-                  const done = amDoneIds.has(exercise.id);
-                  return (
-                    <li key={exercise.id}>
-                      <button
-                        type="button"
-                        className="flex min-h-11 w-full items-center gap-2 text-left text-sm text-text"
-                        onClick={() =>
-                          toggleAmChecklistItem(exercise.id, {
-                            date: dateStr,
-                            block: 'am',
-                            day: dayId,
-                            week,
-                            phase,
-                          })
-                        }
-                      >
-                        <span>{done ? '✓' : '○'}</span>
-                        <span>{exercise.name}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+            <section className="mt-4 rounded border border-line bg-surface p-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-text">
+                  AM · {amExercises.length} exercise{amExercises.length === 1 ? '' : 's'}
+                </span>
+                {amSession?.completedAt && <span className="text-xs text-good">Done ✓</span>}
+              </div>
+
+              {mobilityVariable && (
+                <div className="mt-2 rounded bg-surface-2 px-2 py-1.5 text-xs">
+                  <span className="text-muted">This week: </span>
+                  <span className="text-text">{mobilityVariable}</span>
+                </div>
+              )}
+
+              <div className="mt-2 divide-y divide-line">
+                {amExercises.map((exercise) => (
+                  <ExerciseCard
+                    key={exercise.id}
+                    order={exercise.order}
+                    exercise={exercise}
+                    prescription={resolvePrescription(exercise, week)}
+                  />
+                ))}
+              </div>
+
+              <details className="mt-2 text-xs text-muted">
+                <summary>Don't progress if…</summary>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {doNotProgressConditions.map((condition) => (
+                    <li key={condition}>{condition}</li>
+                  ))}
+                </ul>
+              </details>
+
+              <button
+                type="button"
+                onClick={handleStartAm}
+                className="mt-3 min-h-11 w-full rounded bg-good text-base font-medium text-bg"
+              >
+                {amInProgress ? 'Resume AM session' : 'Start AM session'}
+              </button>
+            </section>
           )
         )}
 

@@ -99,12 +99,12 @@ export default function SetLogger({
     weightedReps: reps !== undefined,
     sprint: distanceM !== undefined && distanceM > 0,
     distanceTime: reps !== undefined && reps > 0,
-    timeOnly: true,
+    timeOnly: seconds !== undefined && seconds > 0,
   }[metric];
 
   return (
     <div>
-      {metric === 'hold' && <HoldTimer onComplete={onHoldComplete} />}
+      {(metric === 'hold' || metric === 'timeOnly') && <HoldTimer onComplete={onHoldComplete} />}
 
       {metric === 'attempts' && (
         <div>

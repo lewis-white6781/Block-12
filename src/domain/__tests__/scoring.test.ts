@@ -104,8 +104,12 @@ describe('computeSetScore per metric', () => {
     expect(score).toBeCloseTo(20 * 0.81, 5);
   });
 
-  it('timeOnly and distanceTime score 0 (completion only)', () => {
-    expect(computeSetScore(exercise({ metric: 'timeOnly' }), undefined, set(), 80)).toBe(0);
+  it('timeOnly scores like hold, consistent with AM holds now being tracked (SPEC-V1.1.md 2.3)', () => {
+    const ex = exercise({ metric: 'timeOnly' });
+    expect(computeSetScore(ex, undefined, set({ seconds: 20 }), 80)).toBe(20);
+  });
+
+  it('distanceTime still scores 0 (completion only — no scoring formula in SPEC.md)', () => {
     expect(computeSetScore(exercise({ metric: 'distanceTime' }), undefined, set({ reps: 40 }), 80)).toBe(0);
   });
 
@@ -137,10 +141,21 @@ describe('relative strength', () => {
 
 describe('isQualifyingSet', () => {
   it('excludes any technique flag or RPE 10', () => {
-    expect(isQualifyingSet(set())).toBe(true);
-    expect(isQualifyingSet(set({ techniqueFlags: ['hipsSagged'] }))).toBe(false);
-    expect(isQualifyingSet(set({ rpe: 10 }))).toBe(false);
-    expect(isQualifyingSet(set({ rpe: 9.5 }))).toBe(true);
+    expect(isQualifyingSet(set({ reps: 5 }))).toBe(true);
+    expect(isQualifyingSet(set({ reps: 5, techniqueFlags: ['hipsSagged'] }))).toBe(false);
+    expect(isQualifyingSet(set({ reps: 5, rpe: 10 }))).toBe(false);
+    expect(isQualifyingSet(set({ reps: 5, rpe: 9.5 }))).toBe(true);
+  });
+
+  it('excludes sets with no raw value at all — v1.0 AM checklist completion markers', () => {
+    // { id, techniqueFlags: [], score: 0 } is exactly what toggleAmChecklistItem
+    // wrote pre-v1.1 (useStore.ts) — it must never qualify as a baseline.
+    expect(isQualifyingSet(set())).toBe(false);
+  });
+
+  it('qualifies a seconds-only set (holds/timeOnly) and an attempts-only set', () => {
+    expect(isQualifyingSet(set({ seconds: 12 }))).toBe(true);
+    expect(isQualifyingSet(set({ attempts: [4, 5] }))).toBe(true);
   });
 });
 
@@ -227,11 +242,12 @@ describe('exerciseRollingBestRaw', () => {
     expect(exerciseRollingBestRaw(sessionLogs, 'ex1', 'reps', 'current')).toBe(8);
   });
 
-  it('reads seconds for hold/attempts metrics', () => {
+  it('reads seconds for hold/attempts/timeOnly metrics', () => {
     const sessionLogs: Record<string, SessionLog> = {
       w1: session({ id: 'w1', date: '2026-01-01', exercises: [{ exerciseId: 'ex1', sets: [set({ seconds: 7 })] }] }),
     };
     expect(exerciseRollingBestRaw(sessionLogs, 'ex1', 'hold', 'none')).toBe(7);
+    expect(exerciseRollingBestRaw(sessionLogs, 'ex1', 'timeOnly', 'none')).toBe(7);
   });
 
   it('is null with no prior sessions', () => {
