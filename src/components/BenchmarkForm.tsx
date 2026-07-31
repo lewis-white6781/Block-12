@@ -1,9 +1,9 @@
 // SPEC.md sections 5.9, 5.7 ("in those weeks the Sunday screen opens the
 // Benchmark form instead of the checklist"), 7.6.
 import { useState } from 'react';
-import { format } from 'date-fns';
 import { useStore } from '../store/useStore';
 import { benchmarks } from '../data/mobility';
+import { todayISO } from '../domain/clock';
 import NumberPad from './NumberPad';
 
 interface BenchmarkFormProps {
@@ -22,7 +22,7 @@ export default function BenchmarkForm({ week }: BenchmarkFormProps) {
 
   function save() {
     upsertBenchmarkEntry({
-      date: existing?.date ?? format(new Date(), 'yyyy-MM-dd'),
+      date: existing?.date ?? todayISO(),
       week,
       values,
       photoNote: photoNote || undefined,

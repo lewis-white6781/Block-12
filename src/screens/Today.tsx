@@ -7,10 +7,12 @@ import { program, dayTitles } from '../data/program';
 import {
   currentWeek,
   dayIdForDate,
+  exercisesFor,
   isBlockComplete,
   phaseForWeek,
   resolvePrescription,
 } from '../domain/phase';
+import { startOfToday, todayISO } from '../domain/clock';
 import { weeklyRatePct } from '../domain/body';
 import {
   elbowVolumeWarning,
@@ -45,21 +47,15 @@ export default function Today() {
   const [showReadiness, setShowReadiness] = useState(false);
   const [amExpanded, setAmExpanded] = useState(false);
 
-  const today = new Date();
-  const dateStr = format(today, 'yyyy-MM-dd');
+  const today = startOfToday();
+  const dateStr = todayISO();
   const dayId = dayIdForDate(today);
   const week = currentWeek(today, settings.blockStartDate);
   const phase = phaseForWeek(week);
   const blockComplete = isBlockComplete(today, settings.blockStartDate);
 
-  const dayExercises = useMemo(
-    () => program.filter((e) => e.day === dayId).sort((a, b) => a.order - b.order),
-    [dayId],
-  );
-  const amExercises = dayExercises.filter((e) => e.block === 'am');
-  const mainExercises = dayExercises
-    .filter((e) => e.block === 'main')
-    .filter((e) => resolvePrescription(e, week) !== null);
+  const amExercises = useMemo(() => exercisesFor(program, dayId, 'am', week), [dayId, week]);
+  const mainExercises = useMemo(() => exercisesFor(program, dayId, 'main', week), [dayId, week]);
 
   const amSession = sessionLogs[`${dateStr}:am`];
   const amDoneIds = new Set(

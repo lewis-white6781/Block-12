@@ -1,8 +1,9 @@
 // Versioned localStorage persistence — SPEC.md section 2, 4, 7.7.
-// Storage key `block12:v1`, with `schemaVersion` and a `migrate()` stub so a schema
+// Storage key `block12:v1`, with `schemaVersion` and a real migrate() so a schema
 // change never wipes a block mid-flight.
 import { format, startOfWeek } from 'date-fns';
 import { program } from '../data/program';
+import { startOfToday, todayISO } from '../domain/clock';
 import type {
   BenchmarkEntry,
   DailyEntry,
@@ -12,7 +13,7 @@ import type {
 } from '../domain/types';
 
 export const STORAGE_KEY = 'block12:v1';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface PersistedState {
   schemaVersion: number;
@@ -25,7 +26,7 @@ export interface PersistedState {
 
 export function defaultSettings(): Settings {
   return {
-    blockStartDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    blockStartDate: format(startOfWeek(startOfToday(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
     startWeightKg: 77,
     targetWeightKg: 72.5,
     proteinTargetLow: 170,
@@ -45,13 +46,54 @@ export function defaultPersistedState(): PersistedState {
   };
 }
 
+/** Shape of anything that might arrive from an older export or an older localStorage write. */
+type LegacyPersistedState = Partial<Omit<PersistedState, 'settings'>> & {
+  settings?: Partial<Settings>;
+};
+
 /**
- * No schema changes yet — this is a stub. When a future prompt changes the
- * persisted shape, bump SCHEMA_VERSION and add a version-by-version case here
- * instead of discarding whatever was persisted.
+ * v1 -> v2: fills in any missing top-level collections. v1 and v2 share the
+ * same Settings shape, so there is nothing settings-specific to do here yet —
+ * that is handled unconditionally below, for every version, on every call.
  */
-export function migrate(persistedState: unknown, _fromVersion: number): PersistedState {
-  return persistedState as PersistedState;
+function migrateToV2(state: LegacyPersistedState): LegacyPersistedState {
+  return {
+    ...state,
+    dailyEntries: state.dailyEntries ?? {},
+    sessionLogs: state.sessionLogs ?? {},
+    benchmarkEntries: state.benchmarkEntries ?? [],
+    progressionEvents: state.progressionEvents ?? [],
+  };
+}
+
+/**
+ * Version-by-version migration so a schema change never wipes a block
+ * mid-flight. Guards the zustand `persist` rehydration path AND the JSON
+ * import path (`parseImportedState`) with the same logic.
+ *
+ * Settings defaults are re-spread beneath whatever was persisted on every
+ * call, not just when fromVersion is stale. zustand's persist merges the
+ * top-level `settings` object shallowly, so a persisted settings blob
+ * missing a field a later prompt adds (e.g. weightUnit) would otherwise
+ * arrive `undefined` at runtime despite the type claiming it exists. This
+ * keeps every rehydration current without a version bump for every new
+ * optional Settings field.
+ */
+export function migrate(persistedState: unknown, fromVersion: number): PersistedState {
+  let state = persistedState as LegacyPersistedState;
+
+  if (fromVersion < 2) {
+    state = migrateToV2(state);
+  }
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    settings: { ...defaultSettings(), ...state.settings },
+    dailyEntries: state.dailyEntries ?? {},
+    sessionLogs: state.sessionLogs ?? {},
+    benchmarkEntries: state.benchmarkEntries ?? [],
+    progressionEvents: state.progressionEvents ?? [],
+  };
 }
 
 // ---------- export / import (SPEC.md 2, 7.7, acceptance test 20) ----------
@@ -112,8 +154,7 @@ function triggerDownload(filename: string, contents: string, mimeType: string): 
 }
 
 export function downloadJSONExport(state: PersistedState): void {
-  const stamp = format(new Date(), 'yyyy-MM-dd');
-  triggerDownload(`block12-export-${stamp}.json`, serializeState(state), 'application/json');
+  triggerDownload(`block12-export-${todayISO()}.json`, serializeState(state), 'application/json');
 }
 
 // ---------- CSV export of all sets (SPEC.md 7.7) ----------
@@ -193,6 +234,5 @@ export function buildSetsCSV(sessionLogs: Record<string, SessionLog>): string {
 }
 
 export function downloadSetsCSV(sessionLogs: Record<string, SessionLog>): void {
-  const stamp = format(new Date(), 'yyyy-MM-dd');
-  triggerDownload(`block12-sets-${stamp}.csv`, buildSetsCSV(sessionLogs), 'text/csv');
+  triggerDownload(`block12-sets-${todayISO()}.csv`, buildSetsCSV(sessionLogs), 'text/csv');
 }

@@ -5,7 +5,7 @@ import { parseISO } from 'date-fns';
 import { useStore, findPreviousExerciseLog } from '../store/useStore';
 import { program } from '../data/program';
 import { ladders } from '../data/ladders';
-import { currentWeek, resolvePrescription } from '../domain/phase';
+import { currentWeek, exercisesFor, resolvePrescription } from '../domain/phase';
 import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
 import { checkStopRule } from '../domain/analysis';
 import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
@@ -59,10 +59,7 @@ export default function SessionRunner() {
 
   const exercises = useMemo(() => {
     if (!session) return [];
-    return program
-      .filter((e) => e.day === session.day && e.block === session.block)
-      .filter((e) => resolvePrescription(e, session.week) !== null)
-      .sort((a, b) => a.order - b.order);
+    return exercisesFor(program, session.day, session.block, session.week);
   }, [session]);
 
   // Restores the in-progress exercise on refresh: the first one whose target

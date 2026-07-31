@@ -1,6 +1,6 @@
 // SPEC.md section 7.4.
 import { useMemo, useState } from 'react';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { Bar, BarChart, CartesianGrid, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore } from '../store/useStore';
 import {
@@ -12,6 +12,7 @@ import {
   weeklySummaries,
 } from '../domain/body';
 import { currentWeek } from '../domain/phase';
+import { startOfToday, todayISO } from '../domain/clock';
 import DailyEntryFields from '../components/DailyEntryFields';
 import WeightChart from '../components/WeightChart';
 import Stat from '../components/Stat';
@@ -27,11 +28,11 @@ export default function Body() {
   const dailyEntries = useStore((s) => s.dailyEntries);
   const sessionLogs = useStore((s) => s.sessionLogs);
 
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayStr = todayISO();
   const [selectedDate, setSelectedDate] = useState(todayStr);
 
   const entriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
-  const week = currentWeek(new Date(), settings.blockStartDate);
+  const week = currentWeek(startOfToday(), settings.blockStartDate);
 
   const rolling = rolling7Weight(entriesArray, todayStr);
   const rate = weeklyRateKg(entriesArray, todayStr);
@@ -42,8 +43,7 @@ export default function Body() {
   const last7Days = useMemo(
     () =>
       Array.from({ length: 7 }, (_, i) => {
-        const d = new Date();
-        d.setDate(d.getDate() - (6 - i));
+        const d = subDays(startOfToday(), 6 - i);
         const date = format(d, 'yyyy-MM-dd');
         const entry = dailyEntries[date];
         return {

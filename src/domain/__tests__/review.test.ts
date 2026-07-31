@@ -135,15 +135,16 @@ describe('checkEndOfBlockTargets', () => {
       benchmarkEntries: [],
       settings: settings(),
       week12ProgressIndex: () => null,
+      asOfDate: '2026-03-30',
     });
     expect(result[0].items.every((i) => i.status === 'unknown')).toBe(true);
   });
 
   it('marks the weight target met when the rolling average lands in 72-73 kg', () => {
-    const today = new Date();
+    const asOfDate = '2026-03-30';
     const dailyEntries: Record<string, DailyEntry> = {};
     for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
+      const d = new Date(asOfDate);
       d.setDate(d.getDate() - i);
       const date = d.toISOString().slice(0, 10);
       dailyEntries[date] = { date, weightKg: 72.5 };
@@ -155,6 +156,7 @@ describe('checkEndOfBlockTargets', () => {
       benchmarkEntries: [],
       settings: settings(),
       week12ProgressIndex: () => null,
+      asOfDate,
     });
     expect(result[0].items[0].status).toBe('met');
   });
@@ -167,6 +169,7 @@ describe('checkEndOfBlockTargets', () => {
       benchmarkEntries: [],
       settings: settings(),
       week12ProgressIndex: (id) => (id === 'ring-dip' || id === 'ring-pullup' ? 95 : null),
+      asOfDate: '2026-03-30',
     });
     expect(result[0].items[3].status).toBe('met');
   });

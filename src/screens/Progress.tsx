@@ -6,6 +6,7 @@ import { useStore } from '../store/useStore';
 import { program } from '../data/program';
 import { ladders } from '../data/ladders';
 import { dayIdForDate } from '../domain/phase';
+import { startOfToday, todayISO } from '../domain/clock';
 import { SKILLS } from '../domain/analysis';
 import { rolling7Weight } from '../domain/body';
 import { effectiveLevelForSet } from '../domain/difficulty';
@@ -58,7 +59,7 @@ export default function Progress() {
   const progressionEvents = useStore((s) => s.progressionEvents);
 
   const dailyEntriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayStr = todayISO();
 
   const trackedMainExercises = useMemo(() => program.filter((e) => e.block === 'main' && e.tracked), []);
   const [selectedExerciseId, setSelectedExerciseId] = useState(trackedMainExercises[0]?.id ?? '');
@@ -80,7 +81,7 @@ export default function Progress() {
           computeSetScore(exercise, ladder, set, bodyweightAt(date)),
         );
         const progressIndex = exerciseProgressIndex(history);
-        const fourWeeksAgo = format(addDays(new Date(), -28), 'yyyy-MM-dd');
+        const fourWeeksAgo = format(addDays(startOfToday(), -28), 'yyyy-MM-dd');
         const progressIndex4wAgo = exerciseProgressIndex(history.filter((r) => r.date <= fourWeeksAgo));
         const delta = progressIndex !== null && progressIndex4wAgo !== null ? progressIndex - progressIndex4wAgo : null;
         const bestRaw = exerciseRollingBestRaw(sessionLogs, exercise.id, exercise.metric, '', 999);

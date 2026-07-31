@@ -6,6 +6,7 @@ import { ladders } from '../data/ladders';
 import { targets } from '../data/targets';
 import { weeklyProgressionVariables } from '../data/mobility';
 import { currentWeek } from '../domain/phase';
+import { startOfToday, todayISO } from '../domain/clock';
 import { rolling7Weight } from '../domain/body';
 import { buildExerciseHistory, computeSetScore, exerciseProgressIndex } from '../domain/scoring';
 import { buildWeeklyReview, checkEndOfBlockTargets } from '../domain/review';
@@ -28,7 +29,7 @@ export default function Review() {
   const benchmarkEntries = useStore((s) => s.benchmarkEntries);
   const progressionEvents = useStore((s) => s.progressionEvents);
 
-  const [selectedWeek, setSelectedWeek] = useState(() => currentWeek(new Date(), settings.blockStartDate));
+  const [selectedWeek, setSelectedWeek] = useState(() => currentWeek(startOfToday(), settings.blockStartDate));
   const dailyEntriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
 
   const review = useMemo(
@@ -65,6 +66,7 @@ export default function Review() {
           benchmarkEntries,
           settings,
           week12ProgressIndex,
+          asOfDate: todayISO(),
         })
       : null;
 

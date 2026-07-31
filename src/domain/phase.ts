@@ -1,6 +1,6 @@
 // Week/phase resolution — SPEC.md section 6.1.
 import { differenceInCalendarDays, parseISO } from 'date-fns';
-import type { DayId, Exercise, Phase, Prescription } from './types';
+import type { Block, DayId, Exercise, Phase, Prescription } from './types';
 
 const DAY_IDS: DayId[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
@@ -51,4 +51,16 @@ export function resolvePrescription(exercise: Exercise, week: number): Prescript
     }
   }
   return best;
+}
+
+/**
+ * Exercises for a given day and block, in display order, restricted to those
+ * that resolve a prescription for the given week. Shared by Today and
+ * SessionRunner, which both need the same day -> session pipeline.
+ */
+export function exercisesFor(program: Exercise[], dayId: DayId, block: Block, week: number): Exercise[] {
+  return program
+    .filter((e) => e.day === dayId && e.block === block)
+    .filter((e) => resolvePrescription(e, week) !== null)
+    .sort((a, b) => a.order - b.order);
 }

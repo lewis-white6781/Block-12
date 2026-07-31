@@ -313,10 +313,12 @@ export function checkEndOfBlockTargets(input: {
   benchmarkEntries: BenchmarkEntry[];
   settings: Settings;
   week12ProgressIndex: (exerciseId: string) => number | null;
+  /** Date the "current" weight target is evaluated as-of (caller supplies "today"). */
+  asOfDate: string;
 }): TargetCheckGroup[] {
-  const { targetGroups, sessionLogs, dailyEntries, benchmarkEntries, settings } = input;
+  const { targetGroups, sessionLogs, dailyEntries, benchmarkEntries, settings, asOfDate } = input;
   const dailyEntriesArray = Object.values(dailyEntries);
-  const currentWeightKg = rolling7Weight(dailyEntriesArray, format(new Date(), 'yyyy-MM-dd'));
+  const currentWeightKg = rolling7Weight(dailyEntriesArray, asOfDate);
 
   function status(id: string, index: number): TargetStatus {
     // Body: "72-73 kg"
