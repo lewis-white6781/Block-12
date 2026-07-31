@@ -69,7 +69,7 @@ const PERSISTED_KEYS: (keyof PersistedState)[] = [
 export function toPersistedState(state: PersistedState): PersistedState {
   const out = {} as PersistedState;
   for (const key of PERSISTED_KEYS) {
-    (out as Record<string, unknown>)[key] = state[key];
+    (out as unknown as Record<string, unknown>)[key] = state[key];
   }
   return out;
 }

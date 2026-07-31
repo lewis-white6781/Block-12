@@ -1,7 +1,7 @@
 // Autoregulation, joint-irritation volume warnings, optional-second-run gate —
 // SPEC.md sections 6.9 (gate), 6.10.
 import { program } from '../data/program';
-import { bestQualifyingScore, computeSetScore, exerciseSessionBest } from './scoring';
+import { computeSetScore, exerciseSessionBest } from './scoring';
 import type { DayId, Readiness, SessionLog } from './types';
 
 // ---------------------------------------------------------------------------
