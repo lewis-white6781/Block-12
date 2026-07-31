@@ -2,9 +2,10 @@
 
 Single-user, offline-first PWA that runs a fixed 12-week calisthenics + cut block.
 
-The full specification lives in [SPEC.md](./SPEC.md) — it is authoritative for
-program content, engine behavior, and screens. Project rules for working in
-this codebase are in [CLAUDE.md](./CLAUDE.md).
+The full specification lives in [SPEC.md](./SPEC.md), amended by
+[SPEC-V1.1.md](./SPEC-V1.1.md). Together they are authoritative for program
+content, engine behavior, and screens; where they conflict, the amendment wins.
+Project rules for working in this codebase are in [CLAUDE.md](./CLAUDE.md).
 
 ## Data
 

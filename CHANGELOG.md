@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `SPEC-V1.1.md` — spec amendment for v1.1, covering day navigation, full macro
+  tracking, AM progressive overload, the Program screen, and kg/lbs units. Includes
+  the v1.1 prompt pack and acceptance tests 26-50.
+
 ## [1.0.0] - 2026-07-31
 
 Initial build of the fixed 12-week Block 12 program, delivered per the
