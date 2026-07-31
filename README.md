@@ -1,32 +1,33 @@
-# React + TypeScript + Vite
+# Block 12
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Single-user, offline-first PWA that runs a fixed 12-week calisthenics + cut block.
 
-Currently, two official plugins are available:
+The full specification lives in [SPEC.md](./SPEC.md) — it is authoritative for
+program content, engine behavior, and screens. Project rules for working in
+this codebase are in [CLAUDE.md](./CLAUDE.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Data
 
-## React Compiler
+No backend, no auth, no network calls at runtime. All state lives in
+`localStorage` under the key `block12:v1`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Commands
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+npm run dev         # start dev server
+npm run build        # typecheck + production build
+npm run test         # run vitest suite
+npm run typecheck    # tsc --noEmit
+npm run lint          # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Structure
+
+- `src/domain/` — pure functions for all metric math (phase resolution, scoring,
+  difficulty, readiness, review), covered by vitest.
+- `src/data/` — program content (exercises, ladders, mobility, targets). Never
+  hardcode a prescription elsewhere.
+- `src/screens/` — Today, Program, Body, Progress, Review, Session Runner, Settings.
+- `src/store/` — zustand store and localStorage persistence.
+- `src/components/` — presentational components; they read domain results, never
+  compute them.
