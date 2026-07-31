@@ -8,6 +8,7 @@ import { weeklyProgressionVariables } from '../data/mobility';
 import { currentWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
 import { rolling7Weight } from '../domain/body';
+import { convertWeight } from '../domain/units';
 import { buildExerciseHistory, computeSetScore, exerciseProgressIndex } from '../domain/scoring';
 import { buildWeeklyReview, checkEndOfBlockTargets } from '../domain/review';
 import type { TargetStatus } from '../domain/review';
@@ -124,13 +125,15 @@ export default function Review() {
         <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
           <div>
             <div className="text-xs text-muted">Mean</div>
-            <div className="tabular-nums text-text">{review.weight.meanKg !== null ? `${review.weight.meanKg.toFixed(1)} kg` : '—'}</div>
+            <div className="tabular-nums text-text">
+              {review.weight.meanKg !== null ? `${convertWeight(review.weight.meanKg, settings.weightUnit).toFixed(1)} ${settings.weightUnit}` : '—'}
+            </div>
           </div>
           <div>
             <div className="text-xs text-muted">Rate</div>
             <div className="tabular-nums text-text">
               {review.weight.rateKgPerWeek !== null
-                ? `${review.weight.rateKgPerWeek <= 0 ? '−' : '+'}${Math.abs(review.weight.rateKgPerWeek).toFixed(2)} kg/wk`
+                ? `${review.weight.rateKgPerWeek <= 0 ? '−' : '+'}${Math.abs(convertWeight(review.weight.rateKgPerWeek, settings.weightUnit)).toFixed(2)} ${settings.weightUnit}/wk`
                 : '—'}
             </div>
           </div>

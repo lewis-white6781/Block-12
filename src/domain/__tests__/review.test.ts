@@ -12,6 +12,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     proteinTargetLow: 170,
     proteinTargetHigh: 190,
     units: 'metric',
+    weightUnit: 'kg',
     ...overrides,
   };
 }

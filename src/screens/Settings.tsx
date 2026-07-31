@@ -11,6 +11,8 @@ import {
   STORAGE_KEY,
 } from '../store/persist';
 import { generateDemoState } from '../dev/demoSeed';
+import { convertWeight, parseWeight } from '../domain/units';
+import type { WeightUnit } from '../domain/units';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -23,6 +25,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 const inputClass =
   'min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-base tabular-nums text-text';
+
+function displayWeight(kg: number, unit: WeightUnit): number {
+  return Number(convertWeight(kg, unit).toFixed(1));
+}
 
 export default function Settings() {
   const state = useStore();
@@ -89,25 +95,47 @@ export default function Settings() {
 
       <section className="mt-4 rounded border border-line bg-surface p-3">
         <h2 className="text-xs uppercase tracking-wide text-muted">Weight & nutrition</h2>
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          <Field label="Start weight (kg)">
+        <div className="mt-2">
+          <Field label="Weight unit">
+            <div className="flex gap-2">
+              {(['kg', 'lbs'] as const).map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => updateSettings({ weightUnit: u })}
+                  className={`min-h-11 flex-1 rounded border text-sm uppercase ${
+                    settings.weightUnit === u ? 'border-text bg-surface-2 text-text' : 'border-line text-muted'
+                  }`}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+          </Field>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Field label={`Start weight (${settings.weightUnit})`}>
             <input
               type="number"
               inputMode="decimal"
               step="0.1"
               className={inputClass}
-              value={settings.startWeightKg}
-              onChange={(e) => updateSettings({ startWeightKg: Number(e.target.value) })}
+              value={displayWeight(settings.startWeightKg, settings.weightUnit)}
+              onChange={(e) =>
+                updateSettings({ startWeightKg: parseWeight(Number(e.target.value), settings.weightUnit) })
+              }
             />
           </Field>
-          <Field label="Target weight (kg)">
+          <Field label={`Target weight (${settings.weightUnit})`}>
             <input
               type="number"
               inputMode="decimal"
               step="0.1"
               className={inputClass}
-              value={settings.targetWeightKg}
-              onChange={(e) => updateSettings({ targetWeightKg: Number(e.target.value) })}
+              value={displayWeight(settings.targetWeightKg, settings.weightUnit)}
+              onChange={(e) =>
+                updateSettings({ targetWeightKg: parseWeight(Number(e.target.value), settings.weightUnit) })
+              }
             />
           </Field>
           <Field label="Protein target low (g)">

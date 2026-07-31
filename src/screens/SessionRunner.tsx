@@ -8,6 +8,8 @@ import { ladders } from '../data/ladders';
 import { currentWeek, exercisesFor, resolvePrescription } from '../domain/phase';
 import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
 import { checkStopRule } from '../domain/analysis';
+import { convertWeight, parseWeight } from '../domain/units';
+import type { WeightUnit } from '../domain/units';
 import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
 import { formatPrescription } from '../components/ExerciseCard';
 import SetLogger, { Stepper } from '../components/SetLogger';
@@ -28,12 +30,12 @@ function restSecondsFor(exercise: Exercise): number {
   return 90;
 }
 
-function formatLastTime(sets: SetLog[], metric: Exercise['metric']): string {
+function formatLastTime(sets: SetLog[], metric: Exercise['metric'], unit: WeightUnit): string {
   if (sets.length === 0) return '—';
   if (metric === 'hold' || metric === 'attempts') return sets.map((s) => s.seconds ?? '—').join(',') + 's';
   const reps = sets.map((s) => s.reps ?? '—').join(',');
   const kg = sets[sets.length - 1]?.addedKg;
-  return kg ? `${reps} @ +${kg} kg` : reps;
+  return kg ? `${reps} @ +${convertWeight(kg, unit).toFixed(1)} ${unit}` : reps;
 }
 
 function formatLoggedSet(set: SetLog, metric: Exercise['metric']): string {
@@ -223,7 +225,7 @@ export default function SessionRunner() {
         <div className="text-sm text-muted">TARGET {formatPrescription(prescription)}</div>
         <div className="mt-1 text-sm text-muted">
           Last time{previous ? ` (Wk${previous.session.week})` : ''}:{' '}
-          {formatLastTime(previous?.log.sets ?? [], exercise.metric)}
+          {formatLastTime(previous?.log.sets ?? [], exercise.metric, settings.weightUnit)}
         </div>
 
         <StopRuleBanner result={stopRuleResult} />
@@ -275,13 +277,13 @@ export default function SessionRunner() {
 
         {exercise.metric === 'weightedReps' && (
           <label className="mt-3 block text-sm">
-            <span className="text-xs text-muted">Added kg</span>
+            <span className="text-xs text-muted">Added {settings.weightUnit}</span>
             <button
               type="button"
               onClick={() => setPadField('kg')}
               className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-left tabular-nums text-text"
             >
-              {addedKg ?? 0}
+              {convertWeight(addedKg ?? 0, settings.weightUnit).toFixed(1)}
             </button>
           </label>
         )}
@@ -360,10 +362,10 @@ export default function SessionRunner() {
       <NumberPad open={padField === 'reps'} label="Reps" value={reps} onConfirm={setReps} onClose={() => setPadField(null)} />
       <NumberPad
         open={padField === 'kg'}
-        label="Added kg"
-        value={addedKg}
+        label={`Added ${settings.weightUnit}`}
+        value={addedKg !== undefined ? Number(convertWeight(addedKg, settings.weightUnit).toFixed(1)) : undefined}
         allowDecimal
-        onConfirm={setAddedKg}
+        onConfirm={(v) => setAddedKg(parseWeight(v, settings.weightUnit))}
         onClose={() => setPadField(null)}
       />
       <NumberPad

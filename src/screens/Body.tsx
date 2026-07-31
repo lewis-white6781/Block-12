@@ -13,6 +13,7 @@ import {
 } from '../domain/body';
 import { currentWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
+import { convertWeight } from '../domain/units';
 import DailyEntryFields from '../components/DailyEntryFields';
 import WeightChart from '../components/WeightChart';
 import Stat from '../components/Stat';
@@ -33,6 +34,7 @@ export default function Body() {
 
   const entriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
   const week = currentWeek(startOfToday(), settings.blockStartDate);
+  const unit = settings.weightUnit;
 
   const rolling = rolling7Weight(entriesArray, todayStr);
   const rate = weeklyRateKg(entriesArray, todayStr);
@@ -92,17 +94,21 @@ export default function Body() {
             </span>
           )}
         </div>
-        <WeightChart entries={entriesArray} settings={settings} today={todayStr} />
+        <WeightChart entries={entriesArray} settings={settings} today={todayStr} unit={unit} />
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <Stat label="7-day avg" value={rolling !== null ? `${rolling.toFixed(1)} kg` : '—'} />
+          <Stat label="7-day avg" value={rolling !== null ? `${convertWeight(rolling, unit).toFixed(1)} ${unit}` : '—'} />
           <Stat
             label="Rate"
-            value={rate !== null ? `${rate <= 0 ? '−' : '+'}${Math.abs(rate).toFixed(2)} kg/wk` : '—'}
+            value={rate !== null ? `${rate <= 0 ? '−' : '+'}${Math.abs(convertWeight(rate, unit)).toFixed(2)} ${unit}/wk` : '—'}
           />
           <Stat
             label="Wk 12 projection"
-            value={projected !== null ? `${projected.toFixed(1)} kg` : '—'}
-            sublabel={totalChange !== null ? `${totalChange <= 0 ? '−' : '+'}${Math.abs(totalChange).toFixed(1)} kg so far` : undefined}
+            value={projected !== null ? `${convertWeight(projected, unit).toFixed(1)} ${unit}` : '—'}
+            sublabel={
+              totalChange !== null
+                ? `${totalChange <= 0 ? '−' : '+'}${Math.abs(convertWeight(totalChange, unit)).toFixed(1)} ${unit} so far`
+                : undefined
+            }
           />
         </div>
       </section>
@@ -152,7 +158,7 @@ export default function Body() {
           <thead>
             <tr className="text-muted">
               <th className="py-1 pr-2">Wk</th>
-              <th className="py-1 pr-2">Mean kg</th>
+              <th className="py-1 pr-2">Mean {unit}</th>
               <th className="py-1 pr-2">Change</th>
               <th className="py-1 pr-2">Rate %</th>
               <th className="py-1 pr-2">Mean kcal</th>
@@ -164,9 +170,13 @@ export default function Body() {
             {weeks.map((w) => (
               <tr key={w.week} className="border-t border-line">
                 <td className="py-1 pr-2">{w.week}</td>
-                <td className="py-1 pr-2">{w.meanWeightKg?.toFixed(1) ?? '—'}</td>
                 <td className="py-1 pr-2">
-                  {w.changeKg !== null ? `${w.changeKg <= 0 ? '−' : '+'}${Math.abs(w.changeKg).toFixed(1)}` : '—'}
+                  {w.meanWeightKg !== null ? convertWeight(w.meanWeightKg, unit).toFixed(1) : '—'}
+                </td>
+                <td className="py-1 pr-2">
+                  {w.changeKg !== null
+                    ? `${w.changeKg <= 0 ? '−' : '+'}${Math.abs(convertWeight(w.changeKg, unit)).toFixed(1)}`
+                    : '—'}
                 </td>
                 <td className="py-1 pr-2">{w.ratePct !== null ? `${w.ratePct.toFixed(2)}%` : '—'}</td>
                 <td className="py-1 pr-2">{w.meanCalories?.toFixed(0) ?? '—'}</td>

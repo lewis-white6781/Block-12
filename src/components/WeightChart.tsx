@@ -12,6 +12,8 @@ import {
   YAxis,
 } from 'recharts';
 import { projectedWeekTwelveWeight, rolling7Weight } from '../domain/body';
+import { convertWeight } from '../domain/units';
+import type { WeightUnit } from '../domain/units';
 import type { DailyEntry, Settings } from '../domain/types';
 
 interface ChartPoint {
@@ -26,13 +28,16 @@ interface WeightChartProps {
   entries: DailyEntry[];
   settings: Settings;
   today: string;
+  unit: WeightUnit;
 }
 
 const BLOCK_DAYS = 84; // 12 weeks
 
-export default function WeightChart({ entries, settings, today }: WeightChartProps) {
+export default function WeightChart({ entries, settings, today, unit }: WeightChartProps) {
   const start = parseISO(settings.blockStartDate);
 
+  // All math here stays kg-native (SPEC-V1.1.md section 3); conversion to the
+  // display unit happens once, per point, right before handing data to recharts.
   const data: ChartPoint[] = Array.from({ length: BLOCK_DAYS }, (_, i) => {
     const date = format(addDays(start, i), 'yyyy-MM-dd');
     const t = i / (BLOCK_DAYS - 1);
@@ -44,9 +49,9 @@ export default function WeightChart({ entries, settings, today }: WeightChartPro
     const rolling = date <= today ? rolling7Weight(entries, date) : null;
     return {
       date,
-      actual: entry?.weightKg,
-      rolling: rolling ?? undefined,
-      corridorBand: [corridorMid - 1, corridorMid + 1],
+      actual: entry?.weightKg !== undefined ? convertWeight(entry.weightKg, unit) : undefined,
+      rolling: rolling !== null ? convertWeight(rolling, unit) : undefined,
+      corridorBand: [convertWeight(corridorMid - 1, unit), convertWeight(corridorMid + 1, unit)] as [number, number],
     };
   });
 
@@ -55,8 +60,8 @@ export default function WeightChart({ entries, settings, today }: WeightChartPro
   if (projectedWeight !== null && currentRolling !== null) {
     const todayIndex = data.findIndex((d) => d.date === today);
     if (todayIndex >= 0) {
-      data[todayIndex].projected = currentRolling;
-      data[BLOCK_DAYS - 1].projected = projectedWeight;
+      data[todayIndex].projected = convertWeight(currentRolling, unit);
+      data[BLOCK_DAYS - 1].projected = convertWeight(projectedWeight, unit);
     }
   }
 

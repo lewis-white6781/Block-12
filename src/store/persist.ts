@@ -32,6 +32,7 @@ export function defaultSettings(): Settings {
     proteinTargetLow: 170,
     proteinTargetHigh: 190,
     units: 'metric',
+    weightUnit: 'kg',
   };
 }
 

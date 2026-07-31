@@ -154,5 +154,8 @@ export interface Settings {
   proteinTargetLow: number; // 170
   proteinTargetHigh: number; // 190
   units: 'metric';
+  // Display/entry unit only (SPEC-V1.1.md section 3). The domain and all
+  // stored/exported weight values are always kg regardless of this setting.
+  weightUnit: 'kg' | 'lbs';
   reminderTime?: string;
 }

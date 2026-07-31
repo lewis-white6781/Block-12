@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { corridorStatus, rolling7Weight, weeklyRateKg } from '../domain/body';
+import { convertWeight, parseWeight } from '../domain/units';
 import NumberPad from './NumberPad';
 
 interface DailyEntryFieldsProps {
@@ -14,6 +15,8 @@ type PadField = 'weight' | 'calories' | 'protein';
 export default function DailyEntryFields({ date, showSummary }: DailyEntryFieldsProps) {
   const dailyEntries = useStore((s) => s.dailyEntries);
   const upsertDailyEntry = useStore((s) => s.upsertDailyEntry);
+  const settings = useStore((s) => s.settings);
+  const unit = settings.weightUnit;
   const [padField, setPadField] = useState<PadField | null>(null);
 
   const entry = dailyEntries[date];
@@ -21,6 +24,8 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
   const rolling = rolling7Weight(entriesArray, date);
   const rate = weeklyRateKg(entriesArray, date);
   const status = corridorStatus(rate);
+
+  const displayWeightKg = entry?.weightKg !== undefined ? Number(convertWeight(entry.weightKg, unit).toFixed(1)) : undefined;
 
   function save(field: 'weightKg' | 'calories' | 'proteinG', value: number) {
     upsertDailyEntry({ date, [field]: value });
@@ -31,8 +36,8 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
       <div className="flex gap-2">
         <EntryField
           label="Weight"
-          unit=" kg"
-          value={entry?.weightKg}
+          unit={` ${unit}`}
+          value={displayWeightKg}
           onTap={() => setPadField('weight')}
         />
         <EntryField label="Calories" unit="" value={entry?.calories} onTap={() => setPadField('calories')} />
@@ -41,19 +46,19 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
 
       {showSummary && rolling !== null && (
         <p className="mt-2 text-xs text-muted">
-          7-day avg {rolling.toFixed(1)} kg
+          7-day avg {convertWeight(rolling, unit).toFixed(1)} {unit}
           {rate !== null &&
-            ` · ${rate <= 0 ? '−' : '+'}${Math.abs(rate).toFixed(2)} kg/wk`}
+            ` · ${rate <= 0 ? '−' : '+'}${Math.abs(convertWeight(rate, unit)).toFixed(2)} ${unit}/wk`}
           {status === 'onTrack' && ' ✓'}
         </p>
       )}
 
       <NumberPad
         open={padField === 'weight'}
-        label="Weight (kg)"
-        value={entry?.weightKg}
+        label={`Weight (${unit})`}
+        value={displayWeightKg}
         allowDecimal
-        onConfirm={(v) => save('weightKg', v)}
+        onConfirm={(v) => save('weightKg', parseWeight(v, unit))}
         onClose={() => setPadField(null)}
       />
       <NumberPad
