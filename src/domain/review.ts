@@ -31,7 +31,7 @@ import type {
 // including Sunday carries an AM block).
 const SESSIONS_PLANNED = { main: 5, am: 7 };
 
-const PHASE_NOTES: Record<Phase, string> = {
+export const PHASE_NOTES: Record<Phase, string> = {
   calibration: 'Establish clean baseline numbers on every exercise — this is what everything else is measured against.',
   accumulation: 'Volume phase. Most of the block\'s work happens here; RPE caps at 9 for accessories.',
   deload: 'Half volume, easy RPE (cap 6). Let tendons and CNS catch up before intensification.',

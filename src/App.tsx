@@ -1,4 +1,4 @@
-import { HashRouter, NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { HashRouter, NavLink, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
 import Today from './screens/Today';
 import SessionRunner from './screens/SessionRunner';
 import Progress from './screens/Progress';
@@ -36,6 +36,21 @@ function TabBar() {
   );
 }
 
+function NotFound() {
+  const navigate = useNavigate();
+  return (
+    <div className="p-4">
+      <h1 className="font-display text-2xl text-text">Not found</h1>
+      <p className="mt-2 text-sm text-muted">
+        That page doesn't exist.{' '}
+        <button className="underline" onClick={() => navigate('/')}>
+          Back to Today
+        </button>
+      </p>
+    </div>
+  );
+}
+
 function TabbedLayout() {
   return (
     <div className="flex h-full flex-col">
@@ -58,6 +73,7 @@ function App() {
           <Route path="/program" element={<Program />} />
           <Route path="/more" element={<Settings />} />
           <Route path="/review" element={<Review />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
         <Route path="/session/:date/:block" element={<SessionRunner />} />
       </Routes>
