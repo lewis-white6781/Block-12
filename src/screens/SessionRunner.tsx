@@ -9,6 +9,7 @@ import { currentWeek, exercisesFor, resolvePrescription } from '../domain/phase'
 import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
 import { checkStopRule } from '../domain/analysis';
 import { convertWeight, parseWeight } from '../domain/units';
+import { newId } from '../domain/id';
 import type { WeightUnit } from '../domain/units';
 import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
 import { formatPrescription } from '../components/ExerciseCard';
@@ -133,7 +134,7 @@ export default function SessionRunner() {
 
   function logCurrentSet() {
     if (!exercise) return;
-    const base = { id: crypto.randomUUID(), techniqueFlags: flags, variantId, assistanceTier };
+    const base = { id: newId(), techniqueFlags: flags, variantId, assistanceTier };
     let setLog: SetLog;
     switch (exercise.metric) {
       case 'hold':

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-07-31
+
+### Fixed
+- **Log Set button silently did nothing past the first tap on any exercise
+  when the app was loaded in an insecure context** (plain `http://` on a LAN
+  IP, some webview/PWA installs) — `crypto.randomUUID()` throws there rather
+  than returning a value, since it's gated to secure contexts. Every call
+  site that built a new set/progression-event id (`SessionRunner`'s
+  `logCurrentSet`, `useStore`'s `toggleAmChecklistItem`, `ProgressionLogger`)
+  called it directly, so the click handler threw before `logSet()` ever ran —
+  no error surfaced in the UI, the set count never advanced, and the only way
+  forward looked like skipping to the next exercise. Replaced every call with
+  `domain/id.ts`'s `newId()`, which prefers `crypto.randomUUID()` but falls
+  back to `crypto.getRandomValues()` (unrestricted in all contexts) and then
+  `Math.random()`.
+
 ## [1.1.0] - 2026-07-31
 
 Delivered per the Prompt 1-7 sequence in [SPEC-V1.1.md](./SPEC-V1.1.md) §4,

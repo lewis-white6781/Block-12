@@ -4,6 +4,7 @@
 // created, so it's also where that check has to live.
 import { useState } from 'react';
 import { nextProgressionAxis, oneVariableWarning } from '../domain/analysis';
+import { newId } from '../domain/id';
 import type { Exercise, ProgressionEvent } from '../domain/types';
 
 interface ProgressionLoggerProps {
@@ -40,7 +41,7 @@ export default function ProgressionLogger({
 
   function save(overrideNote?: string) {
     onSave({
-      id: crypto.randomUUID(),
+      id: newId(),
       date,
       exerciseId: exercise.id,
       axis,

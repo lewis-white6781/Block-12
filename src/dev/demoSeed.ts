@@ -8,6 +8,7 @@ import { program } from '../data/program';
 import { ladders } from '../data/ladders';
 import { benchmarks } from '../data/mobility';
 import { resolvePrescription } from '../domain/phase';
+import { newId } from '../domain/id';
 import type { PersistedState } from '../store/persist';
 import { defaultSettings } from '../store/persist';
 import type {
@@ -130,7 +131,7 @@ function buildSet(exercise: Exercise, week: number, setIndex: number, flagThisSe
   const techniqueFlags: TechniqueFlag[] = flagThisSet ? [FLAG_ROTATION[(week + setIndex) % FLAG_ROTATION.length]] : [];
 
   const set: SetLog = {
-    id: crypto.randomUUID(),
+    id: newId(),
     techniqueFlags,
     score: 0,
     variantId: variantIdForWeek(exercise, week),
@@ -154,7 +155,7 @@ function buildSet(exercise: Exercise, week: number, setIndex: number, flagThisSe
 }
 
 function amCompletionSet(): SetLog {
-  return { id: crypto.randomUUID(), techniqueFlags: [], score: 0 };
+  return { id: newId(), techniqueFlags: [], score: 0 };
 }
 
 export function generateDemoState(): PersistedState {
@@ -240,7 +241,7 @@ export function generateDemoState(): PersistedState {
 
   const progressionEvents: ProgressionEvent[] = [
     {
-      id: crypto.randomUUID(),
+      id: newId(),
       date: format(addDays(blockStart, 3), 'yyyy-MM-dd'),
       exerciseId: 'fl-hard-iso',
       axis: 'cleaner line',
@@ -249,7 +250,7 @@ export function generateDemoState(): PersistedState {
       note: 'Demo data.',
     },
     {
-      id: crypto.randomUUID(),
+      id: newId(),
       date: format(addDays(blockStart, 21), 'yyyy-MM-dd'),
       exerciseId: 'pike-hspu',
       axis: 'higher feet',

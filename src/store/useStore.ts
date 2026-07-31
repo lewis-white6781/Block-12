@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { defaultPersistedState, migrate, SCHEMA_VERSION, STORAGE_KEY } from './persist';
 import type { PersistedState } from './persist';
+import { newId } from '../domain/id';
 import type {
   BenchmarkEntry,
   Block,
@@ -109,14 +110,14 @@ export const useStore = create<StoreState>()(
             : existing
               ? session.exercises.map((e) =>
                   e.exerciseId === exerciseId
-                    ? { ...e, sets: [{ id: crypto.randomUUID(), techniqueFlags: [], score: 0 }] }
+                    ? { ...e, sets: [{ id: newId(), techniqueFlags: [], score: 0 }] }
                     : e,
                 )
               : [
                   ...session.exercises,
                   {
                     exerciseId,
-                    sets: [{ id: crypto.randomUUID(), techniqueFlags: [], score: 0 }],
+                    sets: [{ id: newId(), techniqueFlags: [], score: 0 }],
                   },
                 ];
 
