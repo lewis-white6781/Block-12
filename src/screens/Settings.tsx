@@ -4,6 +4,7 @@ import type { ChangeEvent, ReactNode } from 'react';
 import { useStore } from '../store/useStore';
 import {
   defaultPersistedState,
+  downloadDailyEntriesCSV,
   downloadJSONExport,
   downloadSetsCSV,
   ImportError,
@@ -46,6 +47,10 @@ export default function Settings() {
 
   function handleExportCSV() {
     downloadSetsCSV(state.sessionLogs);
+  }
+
+  function handleExportDailyCSV() {
+    downloadDailyEntriesCSV(state.dailyEntries);
   }
 
   function handleImportClick() {
@@ -156,6 +161,54 @@ export default function Settings() {
               onChange={(e) => updateSettings({ proteinTargetHigh: Number(e.target.value) })}
             />
           </Field>
+          <Field label="Carb target low (g)">
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="optional"
+              className={inputClass}
+              value={settings.carbTargetLow ?? ''}
+              onChange={(e) =>
+                updateSettings({ carbTargetLow: e.target.value === '' ? undefined : Number(e.target.value) })
+              }
+            />
+          </Field>
+          <Field label="Carb target high (g)">
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="optional"
+              className={inputClass}
+              value={settings.carbTargetHigh ?? ''}
+              onChange={(e) =>
+                updateSettings({ carbTargetHigh: e.target.value === '' ? undefined : Number(e.target.value) })
+              }
+            />
+          </Field>
+          <Field label="Fat target low (g)">
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="optional"
+              className={inputClass}
+              value={settings.fatTargetLow ?? ''}
+              onChange={(e) =>
+                updateSettings({ fatTargetLow: e.target.value === '' ? undefined : Number(e.target.value) })
+              }
+            />
+          </Field>
+          <Field label="Fat target high (g)">
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="optional"
+              className={inputClass}
+              value={settings.fatTargetHigh ?? ''}
+              onChange={(e) =>
+                updateSettings({ fatTargetHigh: e.target.value === '' ? undefined : Number(e.target.value) })
+              }
+            />
+          </Field>
         </div>
       </section>
 
@@ -194,6 +247,13 @@ export default function Settings() {
             className="min-h-11 w-full rounded border border-line text-sm text-text"
           >
             Download CSV of all sets
+          </button>
+          <button
+            type="button"
+            onClick={handleExportDailyCSV}
+            className="min-h-11 w-full rounded border border-line text-sm text-text"
+          >
+            Download CSV of daily entries
           </button>
         </div>
       </section>

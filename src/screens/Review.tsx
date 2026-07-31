@@ -155,6 +155,18 @@ export default function Review() {
             <div className="text-xs text-muted">Mean kcal</div>
             <div className="tabular-nums text-text">{review.nutrition.meanCalories !== null ? review.nutrition.meanCalories.toFixed(0) : '—'}</div>
           </div>
+          <div>
+            <div className="text-xs text-muted">Mean carbs</div>
+            <div className="tabular-nums text-text">
+              {review.nutrition.meanCarbsG !== null ? `${review.nutrition.meanCarbsG.toFixed(0)} g` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">Mean fat</div>
+            <div className="tabular-nums text-text">
+              {review.nutrition.meanFatG !== null ? `${review.nutrition.meanFatG.toFixed(0)} g` : '—'}
+            </div>
+          </div>
         </div>
       </section>
 

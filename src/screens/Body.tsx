@@ -53,6 +53,8 @@ export default function Body() {
           label: format(d, 'EEE'),
           calories: entry?.calories,
           proteinG: entry?.proteinG,
+          carbsG: entry?.carbsG,
+          fatG: entry?.fatG,
         };
       }),
     [dailyEntries],
@@ -152,9 +154,67 @@ export default function Body() {
         </ResponsiveContainer>
       </section>
 
+      <section className="mt-4 rounded border border-line bg-surface p-3">
+        <span className="text-sm text-text">
+          Carbs · last 7 days
+          {settings.carbTargetLow !== undefined && settings.carbTargetHigh !== undefined && (
+            <span className="text-muted"> (target {settings.carbTargetLow}–{settings.carbTargetHigh} g)</span>
+          )}
+        </span>
+        <ResponsiveContainer width="100%" height={120}>
+          <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid stroke="var(--line)" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--line)' }} tickLine={false} />
+            <YAxis
+              domain={[0, 'dataMax + 40']}
+              tick={{ fill: 'var(--muted)', fontSize: 10 }}
+              axisLine={{ stroke: 'var(--line)' }}
+              tickLine={false}
+              width={32}
+            />
+            <Tooltip
+              contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
+            />
+            {settings.carbTargetLow !== undefined && settings.carbTargetHigh !== undefined && (
+              <ReferenceArea y1={settings.carbTargetLow} y2={settings.carbTargetHigh} fill="var(--good)" fillOpacity={0.15} />
+            )}
+            <Bar dataKey="carbsG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      </section>
+
+      <section className="mt-4 rounded border border-line bg-surface p-3">
+        <span className="text-sm text-text">
+          Fat · last 7 days
+          {settings.fatTargetLow !== undefined && settings.fatTargetHigh !== undefined && (
+            <span className="text-muted"> (target {settings.fatTargetLow}–{settings.fatTargetHigh} g)</span>
+          )}
+        </span>
+        <ResponsiveContainer width="100%" height={120}>
+          <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid stroke="var(--line)" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--line)' }} tickLine={false} />
+            <YAxis
+              domain={[0, 'dataMax + 20']}
+              tick={{ fill: 'var(--muted)', fontSize: 10 }}
+              axisLine={{ stroke: 'var(--line)' }}
+              tickLine={false}
+              width={32}
+            />
+            <Tooltip
+              contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
+            />
+            {settings.fatTargetLow !== undefined && settings.fatTargetHigh !== undefined && (
+              <ReferenceArea y1={settings.fatTargetLow} y2={settings.fatTargetHigh} fill="var(--good)" fillOpacity={0.15} />
+            )}
+            <Bar dataKey="fatG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      </section>
+
       <section className="mt-4 overflow-x-auto rounded border border-line bg-surface p-3">
         <span className="text-sm text-text">Weekly summary</span>
-        <table className="mt-2 w-full min-w-[420px] text-left text-xs">
+        <table className="mt-2 w-full min-w-[560px] text-left text-xs">
           <thead>
             <tr className="text-muted">
               <th className="py-1 pr-2">Wk</th>
@@ -163,6 +223,8 @@ export default function Body() {
               <th className="py-1 pr-2">Rate %</th>
               <th className="py-1 pr-2">Mean kcal</th>
               <th className="py-1 pr-2">Mean protein</th>
+              <th className="py-1 pr-2">Mean carbs</th>
+              <th className="py-1 pr-2">Mean fat</th>
               <th className="py-1">Sessions</th>
             </tr>
           </thead>
@@ -181,6 +243,8 @@ export default function Body() {
                 <td className="py-1 pr-2">{w.ratePct !== null ? `${w.ratePct.toFixed(2)}%` : '—'}</td>
                 <td className="py-1 pr-2">{w.meanCalories?.toFixed(0) ?? '—'}</td>
                 <td className="py-1 pr-2">{w.meanProteinG?.toFixed(0) ?? '—'}</td>
+                <td className="py-1 pr-2">{w.meanCarbsG?.toFixed(0) ?? '—'}</td>
+                <td className="py-1 pr-2">{w.meanFatG?.toFixed(0) ?? '—'}</td>
                 <td className="py-1">{w.sessionsCompleted}</td>
               </tr>
             ))}

@@ -176,7 +176,13 @@ export function generateDemoState(): PersistedState {
       const weightKg = round(78 - (globalDayIndex / 7) * 0.35 + jitter(0.25), 0.1);
       const proteinG = Math.round(180 + jitter(15));
       const calories = Math.round(2300 - globalDayIndex * 2 + jitter(120));
-      dailyEntries[date] = { date, weightKg, proteinG, calories };
+      // Remaining calories after protein split 60/40 carbs/fat -- roughly plausible
+      // cut macros, not exact (no caloriesOverridden flag is set, so the app never
+      // shows a mismatch hint against these).
+      const remaining = Math.max(0, calories - proteinG * 4);
+      const carbsG = Math.round((remaining * 0.6) / 4);
+      const fatG = Math.round((remaining * 0.4) / 9);
+      dailyEntries[date] = { date, weightKg, proteinG, carbsG, fatG, calories };
 
       const dayExercises = program.filter((e) => e.day === dayId);
       const amExercises = dayExercises.filter((e) => e.block === 'am');

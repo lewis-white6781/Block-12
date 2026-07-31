@@ -12,7 +12,7 @@ export const TUNING = {
 
 function rollingMean(
   entries: DailyEntry[],
-  field: 'weightKg' | 'calories' | 'proteinG',
+  field: 'weightKg' | 'calories' | 'proteinG' | 'carbsG' | 'fatG',
   asOfDate: string,
 ): number | null {
   const values = entries
@@ -34,6 +34,19 @@ export function rolling7Calories(entries: DailyEntry[], asOfDate: string): numbe
 
 export function rolling7Protein(entries: DailyEntry[], asOfDate: string): number | null {
   return rollingMean(entries, 'proteinG', asOfDate);
+}
+
+export function rolling7Carbs(entries: DailyEntry[], asOfDate: string): number | null {
+  return rollingMean(entries, 'carbsG', asOfDate);
+}
+
+export function rolling7Fat(entries: DailyEntry[], asOfDate: string): number | null {
+  return rollingMean(entries, 'fatG', asOfDate);
+}
+
+/** 4 kcal/g protein, 4 kcal/g carbs, 9 kcal/g fat — SPEC-V1.1.md section 3. */
+export function caloriesFromMacros(proteinG: number, carbsG: number, fatG: number): number {
+  return proteinG * 4 + carbsG * 4 + fatG * 9;
 }
 
 export function weeklyRateKg(entries: DailyEntry[], asOfDate: string): number | null {
@@ -96,6 +109,8 @@ export interface WeeklySummary {
   ratePct: number | null;
   meanCalories: number | null;
   meanProteinG: number | null;
+  meanCarbsG: number | null;
+  meanFatG: number | null;
   sessionsCompleted: number;
 }
 
@@ -118,6 +133,8 @@ export function weeklySummaries(
     const meanWeightKg = mean(weekEntries.map((e) => e.weightKg).filter((v): v is number => v !== undefined));
     const meanCalories = mean(weekEntries.map((e) => e.calories).filter((v): v is number => v !== undefined));
     const meanProteinG = mean(weekEntries.map((e) => e.proteinG).filter((v): v is number => v !== undefined));
+    const meanCarbsG = mean(weekEntries.map((e) => e.carbsG).filter((v): v is number => v !== undefined));
+    const meanFatG = mean(weekEntries.map((e) => e.fatG).filter((v): v is number => v !== undefined));
 
     const changeKg =
       meanWeightKg !== null && prevMeanWeightKg !== null ? meanWeightKg - prevMeanWeightKg : null;
@@ -133,6 +150,8 @@ export function weeklySummaries(
       ratePct,
       meanCalories,
       meanProteinG,
+      meanCarbsG,
+      meanFatG,
       sessionsCompleted: Object.values(sessionLogs).filter((s) => s.week === week && s.completedAt).length,
     });
 

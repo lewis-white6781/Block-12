@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  caloriesFromMacros,
   corridorStatus,
   projectedWeekTwelveWeight,
   rolling7Calories,
+  rolling7Carbs,
+  rolling7Fat,
   rolling7Protein,
   rolling7Weight,
   totalChangeFromStart,
@@ -12,15 +15,15 @@ import {
 } from '../body';
 import type { DailyEntry, SessionLog } from '../types';
 
-function entry(date: string, weightKg?: number, calories?: number, proteinG?: number): DailyEntry {
-  return { date, weightKg, calories, proteinG };
+function entry(date: string, overrides: Partial<Omit<DailyEntry, 'date'>> = {}): DailyEntry {
+  return { date, ...overrides };
 }
 
 describe('rolling7Weight — sparse data', () => {
   it('returns null (not NaN) with fewer than 4 weigh-ins', () => {
     const days = ['2026-01-01', '2026-01-02', '2026-01-03'];
     for (let n = 0; n <= 3; n++) {
-      const entries = days.slice(0, n).map((d) => entry(d, 80));
+      const entries = days.slice(0, n).map((d) => entry(d, { weightKg: 80 }));
       const result = rolling7Weight(entries, '2026-01-03');
       expect(result).toBeNull();
       expect(Number.isNaN(result)).toBe(false);
@@ -29,10 +32,10 @@ describe('rolling7Weight — sparse data', () => {
 
   it('returns the mean once there are exactly 4 points', () => {
     const entries = [
-      entry('2026-01-01', 80.0),
-      entry('2026-01-02', 79.9),
-      entry('2026-01-03', 79.8),
-      entry('2026-01-04', 79.7),
+      entry('2026-01-01', { weightKg: 80.0 }),
+      entry('2026-01-02', { weightKg: 79.9 }),
+      entry('2026-01-03', { weightKg: 79.8 }),
+      entry('2026-01-04', { weightKg: 79.7 }),
     ];
     expect(rolling7Weight(entries, '2026-01-04')).toBeCloseTo(79.85, 5);
   });
@@ -41,7 +44,7 @@ describe('rolling7Weight — sparse data', () => {
 describe('11-day linear fixture (hand-verifiable to 2dp)', () => {
   // day i (1-indexed) = 80.0 - 0.1*(i-1), 2026-01-01 .. 2026-01-11
   const entries: DailyEntry[] = Array.from({ length: 11 }, (_, i) =>
-    entry(`2026-01-${String(i + 1).padStart(2, '0')}`, Math.round((80 - 0.1 * i) * 10) / 10),
+    entry(`2026-01-${String(i + 1).padStart(2, '0')}`, { weightKg: Math.round((80 - 0.1 * i) * 10) / 10 }),
   );
 
   it('computes the correct 7-day rolling average at day 11 and day 4', () => {
@@ -78,7 +81,7 @@ describe('11-day linear fixture (hand-verifiable to 2dp)', () => {
 });
 
 describe('null propagation', () => {
-  const sparse: DailyEntry[] = [entry('2026-01-01', 80), entry('2026-01-02', 79.9)];
+  const sparse: DailyEntry[] = [entry('2026-01-01', { weightKg: 80 }), entry('2026-01-02', { weightKg: 79.9 })];
 
   it('weeklyRateKg is null when either rolling window is insufficient', () => {
     expect(weeklyRateKg(sparse, '2026-01-02')).toBeNull();
@@ -138,10 +141,22 @@ describe('weeklySummaries', () => {
   it('computes per-week means, change, rate%, and session counts', () => {
     const entries: DailyEntry[] = [
       ...Array.from({ length: 7 }, (_, i) =>
-        entry(`2026-01-${String(i + 1).padStart(2, '0')}`, 80, 2400, 180),
+        entry(`2026-01-${String(i + 1).padStart(2, '0')}`, {
+          weightKg: 80,
+          calories: 2400,
+          proteinG: 180,
+          carbsG: 250,
+          fatG: 70,
+        }),
       ),
       ...Array.from({ length: 7 }, (_, i) =>
-        entry(`2026-01-${String(i + 8).padStart(2, '0')}`, 79, 2300, 175),
+        entry(`2026-01-${String(i + 8).padStart(2, '0')}`, {
+          weightKg: 79,
+          calories: 2300,
+          proteinG: 175,
+          carbsG: 230,
+          fatG: 65,
+        }),
       ),
     ];
     const sessionLogs: Record<string, SessionLog> = {
@@ -160,25 +175,47 @@ describe('weeklySummaries', () => {
       ratePct: null,
       meanCalories: 2400,
       meanProteinG: 180,
+      meanCarbsG: 250,
+      meanFatG: 70,
       sessionsCompleted: 1,
     });
     expect(summaries[1].week).toBe(2);
     expect(summaries[1].meanWeightKg).toBeCloseTo(79, 5);
     expect(summaries[1].changeKg).toBeCloseTo(-1, 5);
     expect(summaries[1].ratePct).toBeCloseTo(-1.25, 5);
+    expect(summaries[1].meanCarbsG).toBeCloseTo(230, 5);
+    expect(summaries[1].meanFatG).toBeCloseTo(65, 5);
     expect(summaries[1].sessionsCompleted).toBe(2);
   });
 });
 
-describe('rolling7Calories and rolling7Protein', () => {
+describe('rolling7Calories, rolling7Protein, rolling7Carbs, rolling7Fat', () => {
   it('use the same rolling-mean mechanism on their own fields', () => {
     const entries = [
-      entry('2026-01-01', undefined, 2400, 180),
-      entry('2026-01-02', undefined, 2350, 175),
-      entry('2026-01-03', undefined, 2500, 185),
-      entry('2026-01-04', undefined, 2300, 170),
+      entry('2026-01-01', { calories: 2400, proteinG: 180, carbsG: 260, fatG: 75 }),
+      entry('2026-01-02', { calories: 2350, proteinG: 175, carbsG: 250, fatG: 72 }),
+      entry('2026-01-03', { calories: 2500, proteinG: 185, carbsG: 270, fatG: 80 }),
+      entry('2026-01-04', { calories: 2300, proteinG: 170, carbsG: 240, fatG: 68 }),
     ];
     expect(rolling7Calories(entries, '2026-01-04')).toBeCloseTo(2387.5, 5);
     expect(rolling7Protein(entries, '2026-01-04')).toBeCloseTo(177.5, 5);
+    expect(rolling7Carbs(entries, '2026-01-04')).toBeCloseTo(255, 5);
+    expect(rolling7Fat(entries, '2026-01-04')).toBeCloseTo(73.75, 5);
+  });
+
+  it('returns null under the minimum point threshold, same as the other rolling means', () => {
+    const entries = [entry('2026-01-01', { carbsG: 260 }), entry('2026-01-02', { fatG: 72 })];
+    expect(rolling7Carbs(entries, '2026-01-02')).toBeNull();
+    expect(rolling7Fat(entries, '2026-01-02')).toBeNull();
+  });
+});
+
+describe('caloriesFromMacros', () => {
+  it('computes 4/4/9 kcal per gram of protein/carbs/fat', () => {
+    expect(caloriesFromMacros(180, 250, 70)).toBe(180 * 4 + 250 * 4 + 70 * 9);
+  });
+
+  it('is zero for zero macros', () => {
+    expect(caloriesFromMacros(0, 0, 0)).toBe(0);
   });
 });

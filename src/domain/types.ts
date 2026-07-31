@@ -124,6 +124,11 @@ export interface DailyEntry {
   weightKg?: number; // morning, fasted
   calories?: number;
   proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  // true once calories has been typed directly rather than derived from
+  // macros (4/4/9) — SPEC-V1.1.md section 3. The typed value then wins.
+  caloriesOverridden?: boolean;
   steps?: number; // optional
   note?: string;
 }
@@ -153,6 +158,12 @@ export interface Settings {
   targetWeightKg: number; // 72.5
   proteinTargetLow: number; // 170
   proteinTargetHigh: number; // 190
+  // Unlike protein, SPEC.md gives no numeric carb/fat targets — the user sets
+  // these themselves, so they stay unset (no band shown) until they do.
+  carbTargetLow?: number;
+  carbTargetHigh?: number;
+  fatTargetLow?: number;
+  fatTargetHigh?: number;
   units: 'metric';
   // Display/entry unit only (SPEC-V1.1.md section 3). The domain and all
   // stored/exported weight values are always kg regardless of this setting.

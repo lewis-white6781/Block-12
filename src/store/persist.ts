@@ -237,3 +237,47 @@ export function buildSetsCSV(sessionLogs: Record<string, SessionLog>): string {
 export function downloadSetsCSV(sessionLogs: Record<string, SessionLog>): void {
   triggerDownload(`block12-sets-${todayISO()}.csv`, buildSetsCSV(sessionLogs), 'text/csv');
 }
+
+// ---------- CSV export of daily entries (SPEC-V1.1.md section 4, prompt 5) ----------
+// Weight is exported in kg regardless of the display unit setting, matching the
+// sets CSV's addedKg column -- CSV export is the portable/backup format and
+// stays kg-native.
+
+const DAILY_ENTRY_CSV_HEADERS = [
+  'date',
+  'weightKg',
+  'calories',
+  'caloriesOverridden',
+  'proteinG',
+  'carbsG',
+  'fatG',
+  'steps',
+  'note',
+];
+
+export function buildDailyEntriesCSV(dailyEntries: Record<string, DailyEntry>): string {
+  const rows: string[] = [DAILY_ENTRY_CSV_HEADERS.join(',')];
+  const entries = Object.values(dailyEntries).sort((a, b) => a.date.localeCompare(b.date));
+  for (const entry of entries) {
+    rows.push(
+      [
+        entry.date,
+        entry.weightKg,
+        entry.calories,
+        entry.caloriesOverridden ?? '',
+        entry.proteinG,
+        entry.carbsG,
+        entry.fatG,
+        entry.steps,
+        entry.note,
+      ]
+        .map(csvEscape)
+        .join(','),
+    );
+  }
+  return rows.join('\n');
+}
+
+export function downloadDailyEntriesCSV(dailyEntries: Record<string, DailyEntry>): void {
+  triggerDownload(`block12-daily-${todayISO()}.csv`, buildDailyEntriesCSV(dailyEntries), 'text/csv');
+}

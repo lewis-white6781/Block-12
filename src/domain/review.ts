@@ -10,7 +10,7 @@ import {
   weeklyStopRuleFirings,
 } from './analysis';
 import type { GuardrailFiring, StagnationResult, StopRuleResult } from './analysis';
-import { corridorStatus, rolling7Calories, rolling7Weight, weeklyRateKg } from './body';
+import { corridorStatus, rolling7Calories, rolling7Carbs, rolling7Fat, rolling7Weight, weeklyRateKg } from './body';
 import type { CorridorStatus } from './body';
 import { dayIdForDate, phaseForWeek } from './phase';
 import { buildExerciseHistory, computeSetScore, exerciseProgressIndex, isQualifyingSet } from './scoring';
@@ -54,6 +54,8 @@ export interface WeeklyReview {
   nutrition: {
     proteinAdherenceDays: number;
     meanCalories: number | null;
+    meanCarbsG: number | null;
+    meanFatG: number | null;
   };
   skillDeltas: {
     skill: (typeof SKILLS)[number];
@@ -159,6 +161,8 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
       e.proteinG !== undefined && e.proteinG >= settings.proteinTargetLow && e.proteinG <= settings.proteinTargetHigh,
   ).length;
   const meanCalories = rolling7Calories(dailyEntriesArray, end);
+  const meanCarbsG = rolling7Carbs(dailyEntriesArray, end);
+  const meanFatG = rolling7Fat(dailyEntriesArray, end);
 
   // --- per-skill Progress Index + weekly delta ---
   const scoreForSet = (exercise: Exercise, ladder: Ladder | undefined) => (set: Parameters<typeof computeSetScore>[2], date: string) =>
@@ -251,7 +255,7 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
     sessionsCompleted: { main: mainCompleted, am: amCompleted },
     sessionsPlanned: SESSIONS_PLANNED,
     weight: { meanKg, rateKgPerWeek: rateKg, status: corridorStatus(rateKg) },
-    nutrition: { proteinAdherenceDays, meanCalories },
+    nutrition: { proteinAdherenceDays, meanCalories, meanCarbsG, meanFatG },
     skillDeltas,
     firedFlags: { stagnation, guardrails, stopRules, oneVariableOverrides },
     nextWeek,
