@@ -13,7 +13,7 @@ import {
   resolvePrescription,
 } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
-import { weeklyRatePct } from '../domain/body';
+import { rolling7Weight, weeklyRatePct } from '../domain/body';
 import {
   elbowVolumeWarning,
   isElbowWarningDay,
@@ -22,6 +22,10 @@ import {
   shoulderVolumeWarning,
 } from '../domain/readiness';
 import { doNotProgressConditions, weeklyProgressionVariables } from '../data/mobility';
+import { ladders } from '../data/ladders';
+import { detectStagnation } from '../domain/analysis';
+import { buildExerciseHistory, computeSetScore } from '../domain/scoring';
+import { daysWithLoggedWeight } from '../domain/review';
 import type { Readiness, SessionLog } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
 import ReadinessCheckIn from '../components/ReadinessCheckIn';
@@ -99,6 +103,36 @@ export default function Today() {
           weeklyRatePct: weeklyRatePct(Object.values(dailyEntries), dateStr),
         })
       : null;
+
+  const progressionEvents = useStore((s) => s.progressionEvents);
+
+  // Stagnation card (SPEC.md 7.1 wireframe, "⚠ pike-hspu flat 3 sessions") —
+  // checked only against today's own exercises, main first then AM, so at
+  // most one card shows and it's always something you can act on right now.
+  const todaysStagnation = useMemo(() => {
+    const dailyEntriesArray = Object.values(dailyEntries);
+    const bodyweightAt = (date: string) => rolling7Weight(dailyEntriesArray, date) ?? settings.startWeightKg;
+    for (const exercise of [...mainExercises, ...amExercises]) {
+      const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
+      const history = buildExerciseHistory(sessionLogs, exercise.id, (set, date) =>
+        computeSetScore(exercise, ladder, set, bodyweightAt(date)),
+      );
+      const result = detectStagnation({
+        exercise,
+        history,
+        health: {
+          exerciseId: exercise.id,
+          recentReadiness,
+          daysWithLoggedWeightInLast7: daysWithLoggedWeight(dailyEntriesArray, dateStr),
+        },
+        phase,
+        progressionEvents,
+      });
+      if (result) return result;
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainExercises, amExercises, sessionLogs, dailyEntries, recentReadiness, dateStr, phase, progressionEvents, settings.startWeightKg]);
 
   function handleStartAm() {
     // No readiness gate for AM (SPEC.md 7.1 reserves that check-in for Main);
@@ -180,6 +214,17 @@ export default function Today() {
 
       <div className="flex-1 overflow-y-auto p-4">
         <h2 className="font-display text-lg text-text">{dayTitles[dayId]}</h2>
+
+        {todaysStagnation && (
+          <div
+            className={`mt-3 rounded px-3 py-2 text-sm ${
+              todaysStagnation.type === 'stagnant' ? 'bg-warn text-bg' : 'bg-surface-2 text-text'
+            }`}
+          >
+            {todaysStagnation.type === 'stagnant' ? '⚠ ' : ''}
+            {todaysStagnation.message}
+          </div>
+        )}
 
         {elbowWarning && (
           <div className="mt-3 rounded bg-warn px-3 py-2 text-sm text-bg">{elbowWarning.message}</div>

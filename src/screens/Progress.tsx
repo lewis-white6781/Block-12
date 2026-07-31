@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { addDays, format, parseISO } from 'date-fns';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore } from '../store/useStore';
-import { program } from '../data/program';
+import { dayTitles, program } from '../data/program';
 import { ladders } from '../data/ladders';
 import { dayIdForDate } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
@@ -17,8 +17,9 @@ import {
   exerciseRollingBestRaw,
   isQualifyingSet,
 } from '../domain/scoring';
-import type { Exercise, Ladder, SessionLog } from '../domain/types';
+import type { DayId, Exercise, Ladder, SessionLog } from '../domain/types';
 import ProgressChart from '../components/ProgressChart';
+import Sheet from '../components/Sheet';
 
 const SKILL_COLOR: Record<string, string> = {
   frontLever: 'var(--good)',
@@ -26,6 +27,112 @@ const SKILL_COLOR: Record<string, string> = {
   pistol: 'var(--intensification)',
   pullup: 'var(--peak)',
 };
+
+const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+/**
+ * Grouped-by-day-and-block browse view, or a flat name search — no invented
+ * muscle-group taxonomy, per SPEC-V1.1.md prompt 7. Built on the existing
+ * Sheet component; day/block/order are all data that already exists on Exercise.
+ */
+function ExercisePickerSheet({
+  open,
+  onClose,
+  exercises,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  exercises: Exercise[];
+  onPick: (id: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    return exercises.filter((e) => e.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name));
+  }, [query, exercises]);
+
+  const groups = useMemo(() => {
+    return DAY_ORDER.map((day) => ({
+      day,
+      label: dayTitles[day],
+      main: exercises.filter((e) => e.day === day && e.block === 'main').sort((a, b) => a.order - b.order),
+      am: exercises.filter((e) => e.day === day && e.block === 'am').sort((a, b) => a.order - b.order),
+    })).filter((g) => g.main.length > 0 || g.am.length > 0);
+  }, [exercises]);
+
+  function pick(id: string) {
+    onPick(id);
+    setQuery('');
+    onClose();
+  }
+
+  function ExerciseRow({ exercise, showDay }: { exercise: Exercise; showDay: boolean }) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => pick(exercise.id)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm text-text"
+        >
+          <span>{exercise.name}</span>
+          <span className="shrink-0 text-xs uppercase tracking-wide text-muted">
+            {showDay ? `${dayTitles[exercise.day]} · ` : ''}
+            {exercise.block}
+          </span>
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Choose exercise">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search exercises…"
+        autoFocus
+        className="min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-base text-text"
+      />
+      <div className="mt-3 max-h-[55vh] overflow-y-auto">
+        {searchResults ? (
+          searchResults.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted">No matches.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {searchResults.map((e) => (
+                <ExerciseRow key={e.id} exercise={e} showDay />
+              ))}
+            </ul>
+          )
+        ) : (
+          groups.map((g) => (
+            <div key={g.day} className="mb-3">
+              <div className="text-xs uppercase tracking-wide text-muted">{g.label}</div>
+              {g.main.length > 0 && (
+                <ul className="mt-1 divide-y divide-line">
+                  {g.main.map((e) => (
+                    <ExerciseRow key={e.id} exercise={e} showDay={false} />
+                  ))}
+                </ul>
+              )}
+              {g.am.length > 0 && (
+                <ul className="mt-1 divide-y divide-line">
+                  {g.am.map((e) => (
+                    <ExerciseRow key={e.id} exercise={e} showDay={false} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </Sheet>
+  );
+}
 
 function ladderFor(exercise: Exercise | undefined): Ladder | undefined {
   return exercise?.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
@@ -62,13 +169,13 @@ export default function Progress() {
   const todayStr = todayISO();
 
   // AM exercises are tracked as of v1.1 (SPEC-V1.1.md section 2), so the picker
-  // now spans ~70 exercises rather than 27 -- an AM/Main filter keeps it usable.
-  const [blockFilter, setBlockFilter] = useState<'main' | 'am'>('main');
-  const trackedExercises = useMemo(
-    () => program.filter((e) => e.tracked && e.block === blockFilter),
-    [blockFilter],
+  // now spans ~70 exercises rather than 27 -- ExercisePickerSheet groups by
+  // day/block and supports search so it stays usable at that size.
+  const trackedExercises = useMemo(() => program.filter((e) => e.tracked), []);
+  const [selectedExerciseId, setSelectedExerciseId] = useState(
+    trackedExercises.find((e) => e.block === 'main')?.id ?? trackedExercises[0]?.id ?? '',
   );
-  const [selectedExerciseId, setSelectedExerciseId] = useState(trackedExercises[0]?.id ?? '');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const selectedExercise = trackedExercises.find((e) => e.id === selectedExerciseId) ?? trackedExercises[0];
   const selectedLadder = ladderFor(selectedExercise);
 
@@ -210,34 +317,27 @@ export default function Progress() {
       </section>
 
       <section className="mt-4 rounded border border-line bg-surface p-3">
-        <div className="flex gap-2">
-          {(['main', 'am'] as const).map((b) => (
-            <button
-              key={b}
-              type="button"
-              onClick={() => setBlockFilter(b)}
-              className={`min-h-11 flex-1 rounded border text-sm uppercase ${
-                blockFilter === b ? 'border-text bg-surface-2 text-text' : 'border-line text-muted'
-              }`}
-            >
-              {b}
-            </button>
-          ))}
-        </div>
-        <label className="mt-2 block text-sm">
+        <label className="block text-sm">
           <span className="text-xs text-muted">Exercise</span>
-          <select
-            value={selectedExercise?.id ?? ''}
-            onChange={(e) => setSelectedExerciseId(e.target.value)}
-            className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-2 text-text"
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="mt-1 flex min-h-11 w-full items-center justify-between rounded border border-line bg-surface-2 px-3 text-left text-text"
           >
-            {trackedExercises.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
+            <span>{selectedExercise?.name ?? 'Select exercise'}</span>
+            {selectedExercise && (
+              <span className="shrink-0 text-xs uppercase tracking-wide text-muted">
+                {dayTitles[selectedExercise.day]} · {selectedExercise.block}
+              </span>
+            )}
+          </button>
         </label>
+        <ExercisePickerSheet
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          exercises={trackedExercises}
+          onPick={setSelectedExerciseId}
+        />
         {selectedExercise && (
           <div className="mt-3">
             <ProgressChart

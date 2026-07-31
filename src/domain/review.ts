@@ -123,7 +123,7 @@ function recentReadiness(sessionLogs: Record<string, SessionLog>, asOfDate: stri
     .map((s) => s.readiness as Readiness);
 }
 
-function daysWithLoggedWeight(dailyEntries: DailyEntry[], asOfDate: string): number {
+export function daysWithLoggedWeight(dailyEntries: DailyEntry[], asOfDate: string): number {
   const asOf = parseISO(asOfDate);
   let count = 0;
   for (let i = 0; i < 7; i++) {
