@@ -13,7 +13,7 @@ interface BenchmarkFormProps {
 export default function BenchmarkForm({ week }: BenchmarkFormProps) {
   const benchmarkEntries = useStore((s) => s.benchmarkEntries);
   const upsertBenchmarkEntry = useStore((s) => s.upsertBenchmarkEntry);
-  const existing = benchmarkEntries.find((b) => b.week === week);
+  const existing = benchmarkEntries[String(week)];
 
   const [values, setValues] = useState<Record<string, number>>(existing?.values ?? {});
   const [photoNote, setPhotoNote] = useState(existing?.photoNote ?? '');

@@ -316,7 +316,7 @@ export function checkEndOfBlockTargets(input: {
   targetGroups: { id: string; label: string; items: string[] }[];
   sessionLogs: Record<string, SessionLog>;
   dailyEntries: Record<string, DailyEntry>;
-  benchmarkEntries: BenchmarkEntry[];
+  benchmarkEntries: Record<string, BenchmarkEntry>;
   settings: Settings;
   week12ProgressIndex: (exerciseId: string) => number | null;
   /** Date the "current" weight target is evaluated as-of (caller supplies "today"). */
@@ -370,8 +370,8 @@ export function checkEndOfBlockTargets(input: {
     // Mobility: "per §5.9 targets" — met if week-1 -> week-12 benchmarks with an
     // explicit target moved in the right direction by the stated amount.
     if (id === 'mobility' && index === 0) {
-      const week1 = benchmarkEntries.find((b) => b.week === 1);
-      const week12 = benchmarkEntries.find((b) => b.week === 12);
+      const week1 = benchmarkEntries['1'];
+      const week12 = benchmarkEntries['12'];
       if (!week1 || !week12) return 'unknown';
       const kneeDelta = (week12.values.kneeToWall ?? 0) - (week1.values.kneeToWall ?? 0);
       const pikeDelta = (week12.values.pikeReach ?? 0) - (week1.values.pikeReach ?? 0);

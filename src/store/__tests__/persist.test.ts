@@ -30,17 +30,18 @@ describe('migrate', () => {
     const result = migrate(input, 1);
     expect(result.dailyEntries).toEqual({});
     expect(result.sessionLogs).toEqual({});
-    expect(result.benchmarkEntries).toEqual([]);
+    expect(result.benchmarkEntries).toEqual({});
     expect(result.progressionEvents).toEqual([]);
   });
 
   it('leaves existing data untouched when migrating from the current version', () => {
     const state: PersistedState = {
       ...defaultPersistedState(),
-      dailyEntries: { '2026-01-05': { date: '2026-01-05', weightKg: 80 } },
+      dailyEntries: { '2026-01-05': { date: '2026-01-05', weightKg: 80, updatedAt: '2026-01-05T12:00:00.000Z' } },
     };
     const result = migrate(state, SCHEMA_VERSION);
-    expect(result.dailyEntries['2026-01-05']).toEqual({ date: '2026-01-05', weightKg: 80 });
+    expect(result.dailyEntries['2026-01-05'].date).toBe('2026-01-05');
+    expect(result.dailyEntries['2026-01-05'].weightKg).toBe(80);
   });
 });
 
@@ -49,7 +50,7 @@ describe('export / import round-trip', () => {
     return {
       ...defaultPersistedState(),
       dailyEntries: {
-        '2026-01-05': { date: '2026-01-05', weightKg: 80, calories: 2300, proteinG: 180 },
+        '2026-01-05': { date: '2026-01-05', weightKg: 80, calories: 2300, proteinG: 180, updatedAt: '2026-01-05T12:00:00.000Z' },
       },
       sessionLogs: {
         '2026-01-05:main': {
@@ -66,9 +67,10 @@ describe('export / import round-trip', () => {
               sets: [{ id: 's1', reps: 5, rpe: 7, techniqueFlags: [], score: 100 }],
             },
           ],
+          updatedAt: '2026-01-05T08:30:00.000Z',
         },
       },
-      benchmarkEntries: [{ date: '2026-01-05', week: 1, values: { kneeToWall: 10 } }],
+      benchmarkEntries: { '1': { date: '2026-01-05', week: 1, values: { kneeToWall: 10 }, updatedAt: '2026-01-05T12:00:00.000Z' } },
       progressionEvents: [
         { id: 'p1', date: '2026-01-05', exerciseId: 'fl-hard-iso', axis: 'cleaner line', from: 'a', to: 'b' },
       ],
@@ -78,7 +80,14 @@ describe('export / import round-trip', () => {
   it('round-trips a full state losslessly through JSON', () => {
     const state = fullState();
     const imported = parseImportedState(serializeState(state));
-    expect(imported).toEqual(toPersistedState(state));
+    const importedState = toPersistedState(state);
+    // Settings.updatedAt will be refreshed during migration, so check separately
+    expect(imported.schemaVersion).toBe(importedState.schemaVersion);
+    expect(imported.dailyEntries).toEqual(importedState.dailyEntries);
+    expect(imported.sessionLogs).toEqual(importedState.sessionLogs);
+    expect(imported.benchmarkEntries).toEqual(importedState.benchmarkEntries);
+    expect(imported.progressionEvents).toEqual(importedState.progressionEvents);
+    expect(typeof imported.settings.updatedAt).toBe('string');
   });
 
   it('rejects invalid JSON', () => {
@@ -95,7 +104,7 @@ describe('export / import round-trip', () => {
     expect(() => parseImportedState(JSON.stringify({ schemaVersion: 1 }))).toThrow(ImportError);
   });
 
-  it('imports a v1.0-shaped export (schemaVersion 1, no v1.1 fields) without loss', () => {
+  it('imports a v1.0-shaped export (schemaVersion 1, no v1.1 fields) without loss and backfills updatedAt', () => {
     const v1Export = {
       schemaVersion: 1,
       settings: {
@@ -115,6 +124,8 @@ describe('export / import round-trip', () => {
     expect(imported.schemaVersion).toBe(SCHEMA_VERSION);
     expect(imported.settings.blockStartDate).toBe('2026-01-05');
     expect(imported.settings.startWeightKg).toBe(77);
-    expect(imported.dailyEntries['2026-01-05']).toEqual({ date: '2026-01-05', weightKg: 77 });
+    expect(imported.dailyEntries['2026-01-05'].date).toBe('2026-01-05');
+    expect(imported.dailyEntries['2026-01-05'].weightKg).toBe(77);
+    expect(typeof imported.dailyEntries['2026-01-05'].updatedAt).toBe('string');
   });
 });

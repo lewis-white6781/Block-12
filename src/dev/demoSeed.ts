@@ -158,6 +158,10 @@ function amCompletionSet(): SetLog {
   return { id: newId(), techniqueFlags: [], score: 0 };
 }
 
+function makeUpdatedAt(date: string, hour: number = 12): string {
+  return `${date}T${String(hour).padStart(2, '0')}:00:00.000Z`;
+}
+
 export function generateDemoState(): PersistedState {
   const today = new Date();
   const recentMonday = startOfWeek(today, { weekStartsOn: 1 });
@@ -183,7 +187,7 @@ export function generateDemoState(): PersistedState {
       const remaining = Math.max(0, calories - proteinG * 4);
       const carbsG = Math.round((remaining * 0.6) / 4);
       const fatG = Math.round((remaining * 0.4) / 9);
-      dailyEntries[date] = { date, weightKg, proteinG, carbsG, fatG, calories };
+      dailyEntries[date] = { date, weightKg, proteinG, carbsG, fatG, calories, updatedAt: makeUpdatedAt(date) };
 
       const dayExercises = program.filter((e) => e.day === dayId);
       const amExercises = dayExercises.filter((e) => e.block === 'am');
@@ -201,6 +205,7 @@ export function generateDemoState(): PersistedState {
           startedAt: `${date}T07:00:00.000Z`,
           completedAt: `${date}T07:20:00.000Z`,
           exercises: amExercises.map((e) => ({ exerciseId: e.id, sets: [amCompletionSet()] })),
+          updatedAt: makeUpdatedAt(date, 7),
         };
       }
 
@@ -233,6 +238,7 @@ export function generateDemoState(): PersistedState {
             readiness,
             sessionRpe: Math.min(9, round(6.5 + (week - 1) * 0.3, 0.5)),
             exercises: exerciseLogs,
+            updatedAt: makeUpdatedAt(date, 17),
           };
         }
       }
@@ -260,11 +266,12 @@ export function generateDemoState(): PersistedState {
     },
   ];
 
-  const benchmarkEntries: BenchmarkEntry[] = [
+  const benchmarkEntriesArray = [
     {
       date: format(blockStart, 'yyyy-MM-dd'),
       week: 1,
       values: Object.fromEntries(benchmarks.map((b) => [b.id, b.direction === 'lower-better' ? 30 : 10])),
+      updatedAt: makeUpdatedAt(format(blockStart, 'yyyy-MM-dd')),
     },
     {
       date: format(addDays(blockStart, 5 * 7), 'yyyy-MM-dd'),
@@ -272,12 +279,14 @@ export function generateDemoState(): PersistedState {
       values: Object.fromEntries(
         benchmarks.map((b) => [b.id, b.direction === 'lower-better' ? 25 : 13]),
       ),
+      updatedAt: makeUpdatedAt(format(addDays(blockStart, 5 * 7), 'yyyy-MM-dd')),
     },
   ];
+  const benchmarkEntries = Object.fromEntries(benchmarkEntriesArray.map((b) => [String(b.week), b]));
 
   return {
-    schemaVersion: 1,
-    settings: { ...defaultSettings(), blockStartDate },
+    schemaVersion: 3,
+    settings: { ...defaultSettings(), blockStartDate, updatedAt: new Date().toISOString() },
     dailyEntries,
     sessionLogs,
     benchmarkEntries,

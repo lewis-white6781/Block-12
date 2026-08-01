@@ -46,6 +46,7 @@ export type StoreState = PersistedState & StoreActions;
 function ensureSession(sessionLogs: Record<string, SessionLog>, params: StartSessionParams): Record<string, SessionLog> {
   const id = `${params.date}:${params.block}`;
   if (sessionLogs[id]) return sessionLogs;
+  const now = new Date().toISOString();
   const session: SessionLog = {
     id,
     date: params.date,
@@ -53,9 +54,10 @@ function ensureSession(sessionLogs: Record<string, SessionLog>, params: StartSes
     phase: params.phase,
     day: params.day,
     block: params.block,
-    startedAt: new Date().toISOString(),
+    startedAt: now,
     readiness: params.readiness,
     exercises: [],
+    updatedAt: now,
   };
   return { ...sessionLogs, [id]: session };
 }
@@ -66,13 +68,13 @@ export const useStore = create<StoreState>()(
       ...defaultPersistedState(),
 
       updateSettings: (patch) =>
-        set((s) => ({ settings: { ...s.settings, ...patch } })),
+        set((s) => ({ settings: { ...s.settings, ...patch, updatedAt: new Date().toISOString() } })),
 
       upsertDailyEntry: (entry) =>
         set((s) => ({
           dailyEntries: {
             ...s.dailyEntries,
-            [entry.date]: { ...s.dailyEntries[entry.date], ...entry },
+            [entry.date]: { ...s.dailyEntries[entry.date], ...entry, updatedAt: new Date().toISOString() },
           },
         })),
 
@@ -92,7 +94,7 @@ export const useStore = create<StoreState>()(
                 e.exerciseId === exerciseId ? { ...e, sets: [...e.sets, setLog] } : e,
               )
             : [...session.exercises, { exerciseId, sets: [setLog] }];
-          return { sessionLogs: { ...s.sessionLogs, [sessionId]: { ...session, exercises } } };
+          return { sessionLogs: { ...s.sessionLogs, [sessionId]: { ...session, exercises, updatedAt: new Date().toISOString() } } };
         }),
 
       toggleAmChecklistItem: (exerciseId, params) =>
@@ -121,21 +123,23 @@ export const useStore = create<StoreState>()(
                   },
                 ];
 
-          return { sessionLogs: { ...sessionLogs, [id]: { ...session, exercises } } };
+          return { sessionLogs: { ...sessionLogs, [id]: { ...session, exercises, updatedAt: new Date().toISOString() } } };
         }),
 
       completeSession: (sessionId, patch) =>
         set((s) => {
           const session = s.sessionLogs[sessionId];
           if (!session) return {};
+          const now = new Date().toISOString();
           return {
             sessionLogs: {
               ...s.sessionLogs,
               [sessionId]: {
                 ...session,
-                completedAt: new Date().toISOString(),
+                completedAt: now,
                 sessionRpe: patch?.sessionRpe ?? session.sessionRpe,
                 note: patch?.note ?? session.note,
+                updatedAt: now,
               },
             },
           };
@@ -143,7 +147,10 @@ export const useStore = create<StoreState>()(
 
       upsertBenchmarkEntry: (entry) =>
         set((s) => ({
-          benchmarkEntries: [...s.benchmarkEntries.filter((b) => b.week !== entry.week), entry],
+          benchmarkEntries: {
+            ...s.benchmarkEntries,
+            [String(entry.week)]: { ...entry, updatedAt: new Date().toISOString() },
+          },
         })),
 
       addProgressionEvent: (event) =>

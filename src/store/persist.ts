@@ -13,14 +13,14 @@ import type {
 } from '../domain/types';
 
 export const STORAGE_KEY = 'block12:v1';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface PersistedState {
   schemaVersion: number;
   settings: Settings;
   dailyEntries: Record<string, DailyEntry>;
   sessionLogs: Record<string, SessionLog>;
-  benchmarkEntries: BenchmarkEntry[];
+  benchmarkEntries: Record<string, BenchmarkEntry>;
   progressionEvents: ProgressionEvent[];
 }
 
@@ -42,7 +42,7 @@ export function defaultPersistedState(): PersistedState {
     settings: defaultSettings(),
     dailyEntries: {},
     sessionLogs: {},
-    benchmarkEntries: [],
+    benchmarkEntries: {},
     progressionEvents: [],
   };
 }
@@ -68,6 +68,55 @@ function migrateToV2(state: LegacyPersistedState): LegacyPersistedState {
 }
 
 /**
+ * v2 -> v3: add updatedAt timestamps to SessionLog, DailyEntry, BenchmarkEntry, Settings.
+ * Convert benchmarkEntries from array to Record<string, BenchmarkEntry> keyed by String(week).
+ */
+function migrateToV3(state: LegacyPersistedState): LegacyPersistedState {
+  const now = new Date().toISOString();
+
+  const sessionLogs = Object.fromEntries(
+    Object.entries((state.sessionLogs as Record<string, any>) ?? {}).map(([id, s]) => [
+      id,
+      {
+        ...s,
+        updatedAt: s.updatedAt ?? s.completedAt ?? s.startedAt ?? now,
+      },
+    ]),
+  );
+
+  const dailyEntries = Object.fromEntries(
+    Object.entries((state.dailyEntries as Record<string, any>) ?? {}).map(([date, e]) => [
+      date,
+      {
+        ...e,
+        updatedAt: e.updatedAt ?? `${e.date}T12:00:00.000Z`,
+      },
+    ]),
+  );
+
+  // Convert benchmarkEntries from array to map if still array
+  const rawBenchmarks = state.benchmarkEntries;
+  const benchmarkArray = Array.isArray(rawBenchmarks) ? rawBenchmarks : Object.values((rawBenchmarks as Record<string, any>) ?? {});
+  const benchmarkEntries = Object.fromEntries(
+    (benchmarkArray as any[]).map((b) => [
+      String(b.week),
+      {
+        ...b,
+        updatedAt: b.updatedAt ?? `${b.date}T12:00:00.000Z`,
+      },
+    ]),
+  );
+
+  return {
+    ...state,
+    sessionLogs,
+    dailyEntries,
+    benchmarkEntries,
+    progressionEvents: state.progressionEvents ?? [],
+  };
+}
+
+/**
  * Version-by-version migration so a schema change never wipes a block
  * mid-flight. Guards the zustand `persist` rehydration path AND the JSON
  * import path (`parseImportedState`) with the same logic.
@@ -87,12 +136,16 @@ export function migrate(persistedState: unknown, fromVersion: number): Persisted
     state = migrateToV2(state);
   }
 
+  if (fromVersion < 3) {
+    state = migrateToV3(state);
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
-    settings: { ...defaultSettings(), ...state.settings },
+    settings: { ...defaultSettings(), ...state.settings, updatedAt: new Date().toISOString() },
     dailyEntries: state.dailyEntries ?? {},
     sessionLogs: state.sessionLogs ?? {},
-    benchmarkEntries: state.benchmarkEntries ?? [],
+    benchmarkEntries: state.benchmarkEntries ?? {},
     progressionEvents: state.progressionEvents ?? [],
   };
 }

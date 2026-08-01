@@ -108,6 +108,7 @@ export interface SessionLog {
   exercises: ExerciseLog[];
   sessionRpe?: number;
   note?: string;
+  updatedAt: string; // ISO timestamp, bumped on every set logged or session change
 }
 
 export interface Readiness {
@@ -131,6 +132,7 @@ export interface DailyEntry {
   caloriesOverridden?: boolean;
   steps?: number; // optional
   note?: string;
+  updatedAt: string; // ISO timestamp
 }
 
 // ---------- mobility benchmarks (weeks 1, 6, 12) ----------
@@ -139,6 +141,7 @@ export interface BenchmarkEntry {
   week: number;
   values: Record<string, number>; // benchmarkId -> value (cm or degrees)
   photoNote?: string;
+  updatedAt: string; // ISO timestamp
 }
 
 // ---------- progression events (the one-variable rule) ----------
@@ -169,4 +172,5 @@ export interface Settings {
   // stored/exported weight values are always kg regardless of this setting.
   weightUnit: 'kg' | 'lbs';
   reminderTime?: string;
+  updatedAt: string; // ISO timestamp, bumped on any settings change
 }

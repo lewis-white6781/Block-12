@@ -13,6 +13,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     proteinTargetHigh: 190,
     units: 'metric',
     weightUnit: 'kg',
+    updatedAt: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -32,6 +33,7 @@ function mainSession(date: string, week: number, exerciseId: string, sets: SetLo
     startedAt: `${date}T08:00:00.000Z`,
     completedAt: `${date}T09:00:00.000Z`,
     exercises: [{ exerciseId, sets }],
+    updatedAt: `${date}T09:00:00.000Z`,
   };
 }
 
@@ -59,7 +61,7 @@ describe('buildWeeklyReview', () => {
     const dailyEntries: Record<string, DailyEntry> = {};
     for (let i = 0; i < 7; i++) {
       const date = `2026-01-${String(5 + i).padStart(2, '0')}`;
-      dailyEntries[date] = { date, weightKg: 80 - i * 0.1 };
+      dailyEntries[date] = { date, weightKg: 80 - i * 0.1, updatedAt: `${date}T12:00:00.000Z` };
     }
     const review = buildWeeklyReview({
       week: 1,
@@ -133,7 +135,7 @@ describe('checkEndOfBlockTargets', () => {
       targetGroups,
       sessionLogs: {},
       dailyEntries: {},
-      benchmarkEntries: [],
+      benchmarkEntries: {},
       settings: settings(),
       week12ProgressIndex: () => null,
       asOfDate: '2026-03-30',
@@ -148,13 +150,13 @@ describe('checkEndOfBlockTargets', () => {
       const d = new Date(asOfDate);
       d.setDate(d.getDate() - i);
       const date = d.toISOString().slice(0, 10);
-      dailyEntries[date] = { date, weightKg: 72.5 };
+      dailyEntries[date] = { date, weightKg: 72.5, updatedAt: `${date}T12:00:00.000Z` };
     }
     const result = checkEndOfBlockTargets({
       targetGroups,
       sessionLogs: {},
       dailyEntries,
-      benchmarkEntries: [],
+      benchmarkEntries: {},
       settings: settings(),
       week12ProgressIndex: () => null,
       asOfDate,
@@ -167,7 +169,7 @@ describe('checkEndOfBlockTargets', () => {
       targetGroups,
       sessionLogs: {},
       dailyEntries: {},
-      benchmarkEntries: [],
+      benchmarkEntries: {},
       settings: settings(),
       week12ProgressIndex: (id) => (id === 'ring-dip' || id === 'ring-pullup' ? 95 : null),
       asOfDate: '2026-03-30',
