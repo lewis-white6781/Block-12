@@ -14,6 +14,9 @@ export const supabase = createClient(url, anonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false, // Disable to avoid conflicts with HashRouter's # fragments
+    // Magic-link sign-in puts tokens in the URL hash, which HashRouter also reads
+    // for routing. main.tsx's bootstrap() waits for Supabase to consume the hash
+    // and cleans it BEFORE the router ever mounts, so this is safe.
+    detectSessionInUrl: true,
   },
 });

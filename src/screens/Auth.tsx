@@ -108,10 +108,11 @@ export default function Auth({ children }: { children: ReactNode }) {
         {authState === 'code-sent' && (
           <div className="mt-6 space-y-3">
             <p className="text-xs text-muted">
-              A 6-digit code was sent to <span className="text-text">{email}</span>.
+              Check <span className="text-text">{email}</span> — tap "Sign in" in the email to
+              continue. If the email shows a 6-digit code instead, enter it below.
             </p>
             <label className="block">
-              <div className="text-xs uppercase tracking-wide text-muted">Code</div>
+              <div className="text-xs uppercase tracking-wide text-muted">Code (optional)</div>
               <input
                 type="text"
                 inputMode="numeric"
@@ -129,7 +130,7 @@ export default function Auth({ children }: { children: ReactNode }) {
               onClick={handleVerifyCode}
               className="min-h-11 w-full rounded bg-good text-base font-medium text-bg disabled:opacity-40"
             >
-              {busy ? 'Verifying…' : 'Verify'}
+              {busy ? 'Verifying…' : 'Verify code'}
             </button>
             <button
               type="button"
