@@ -6,6 +6,7 @@ import Body from './screens/Body';
 import Program from './screens/Program';
 import Review from './screens/Review';
 import Settings from './screens/Settings';
+import Auth from './screens/Auth';
 
 const TABS = [
   { to: '/', label: 'Today' },
@@ -64,20 +65,22 @@ function TabbedLayout() {
 
 function App() {
   return (
-    <HashRouter>
-      <Routes>
-        <Route element={<TabbedLayout />}>
-          <Route path="/" element={<Today />} />
-          <Route path="/progress" element={<Progress />} />
-          <Route path="/body" element={<Body />} />
-          <Route path="/program" element={<Program />} />
-          <Route path="/more" element={<Settings />} />
-          <Route path="/review" element={<Review />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-        <Route path="/session/:date/:block" element={<SessionRunner />} />
-      </Routes>
-    </HashRouter>
+    <Auth>
+      <HashRouter>
+        <Routes>
+          <Route element={<TabbedLayout />}>
+            <Route path="/" element={<Today />} />
+            <Route path="/progress" element={<Progress />} />
+            <Route path="/body" element={<Body />} />
+            <Route path="/program" element={<Program />} />
+            <Route path="/more" element={<Settings />} />
+            <Route path="/review" element={<Review />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+          <Route path="/session/:date/:block" element={<SessionRunner />} />
+        </Routes>
+      </HashRouter>
+    </Auth>
   );
 }
 
