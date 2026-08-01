@@ -50,7 +50,7 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
     const proteinG = field === 'proteinG' ? value : entry?.proteinG ?? 0;
     const carbsG = field === 'carbsG' ? value : entry?.carbsG ?? 0;
     const fatG = field === 'fatG' ? value : entry?.fatG ?? 0;
-    const patch: DailyEntry = { date, [field]: value };
+    const patch: Partial<DailyEntry> & { date: string } = { date, [field]: value };
     if (!entry?.caloriesOverridden) {
       patch.calories = caloriesFromMacros(proteinG, carbsG, fatG);
     }

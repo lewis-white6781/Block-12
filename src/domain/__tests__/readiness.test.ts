@@ -28,6 +28,7 @@ function sprintSession(date: string, distanceM: number, intensityPct: number, ov
     startedAt: date,
     completedAt: date,
     exercises: [{ exerciseId: 'sprints', sets: [set({ distanceM, intensityPct })] }],
+    updatedAt: date,
     ...overrides,
   };
 }

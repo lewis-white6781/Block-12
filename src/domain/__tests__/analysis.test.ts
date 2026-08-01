@@ -352,6 +352,7 @@ describe('tendon guardrails (6.11)', () => {
         exercises: [
           { exerciseId: 'fl-hard-iso', sets: [set({ techniqueFlags: ['collapsed'] }), set({ techniqueFlags: ['collapsed'] })] },
         ],
+        updatedAt: '2026-01-01T08:00:00.000Z',
       },
     };
     const result = collapseTrainingGuardrails(sessionLogs, [flHold], 3);

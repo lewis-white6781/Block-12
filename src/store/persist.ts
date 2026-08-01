@@ -33,6 +33,7 @@ export function defaultSettings(): Settings {
     proteinTargetHigh: 190,
     units: 'metric',
     weightUnit: 'kg',
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -62,7 +63,7 @@ function migrateToV2(state: LegacyPersistedState): LegacyPersistedState {
     ...state,
     dailyEntries: state.dailyEntries ?? {},
     sessionLogs: state.sessionLogs ?? {},
-    benchmarkEntries: state.benchmarkEntries ?? [],
+    // benchmarkEntries left as-is (array or missing) — migrateToV3 normalizes it to a map.
     progressionEvents: state.progressionEvents ?? [],
   };
 }

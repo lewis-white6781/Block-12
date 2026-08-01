@@ -12,7 +12,6 @@ import { newId } from '../domain/id';
 import type { PersistedState } from '../store/persist';
 import { defaultSettings } from '../store/persist';
 import type {
-  BenchmarkEntry,
   DayId,
   Exercise,
   ProgressionEvent,

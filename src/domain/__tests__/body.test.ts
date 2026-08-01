@@ -16,7 +16,7 @@ import {
 import type { DailyEntry, SessionLog } from '../types';
 
 function entry(date: string, overrides: Partial<Omit<DailyEntry, 'date'>> = {}): DailyEntry {
-  return { date, ...overrides };
+  return { date, updatedAt: `${date}T12:00:00.000Z`, ...overrides };
 }
 
 describe('rolling7Weight — sparse data', () => {
@@ -135,6 +135,7 @@ describe('weeklySummaries', () => {
       startedAt: '2026-01-01T08:00:00.000Z',
       completedAt: completed ? '2026-01-01T09:00:00.000Z' : undefined,
       exercises: [],
+      updatedAt: '2026-01-01T08:00:00.000Z',
     };
   }
 

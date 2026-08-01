@@ -47,6 +47,7 @@ function session(overrides: Partial<SessionLog> = {}): SessionLog {
     block: 'main',
     startedAt: '2026-01-01T08:00:00.000Z',
     exercises: [],
+    updatedAt: '2026-01-01T08:00:00.000Z',
     ...overrides,
   };
 }

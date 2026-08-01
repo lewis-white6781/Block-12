@@ -29,15 +29,16 @@ interface StartSessionParams {
 
 interface StoreActions {
   updateSettings: (patch: Partial<Settings>) => void;
-  upsertDailyEntry: (entry: DailyEntry) => void;
+  /** updatedAt is stamped by the reducer, never supplied by the caller. */
+  upsertDailyEntry: (entry: Partial<DailyEntry> & { date: string }) => void;
   /** Creates the session if it doesn't already exist; otherwise leaves it untouched. */
   startSession: (params: StartSessionParams) => string;
   logSet: (sessionId: string, exerciseId: string, setLog: SetLog) => void;
   /** Toggles a single-set completion marker for an untracked AM checklist item. */
   toggleAmChecklistItem: (exerciseId: string, params: StartSessionParams) => void;
   completeSession: (sessionId: string, patch?: { sessionRpe?: number; note?: string }) => void;
-  /** One entry per (date, week) pair — replaces any existing entry for that week. */
-  upsertBenchmarkEntry: (entry: BenchmarkEntry) => void;
+  /** One entry per (date, week) pair — replaces any existing entry for that week. updatedAt is stamped by the reducer. */
+  upsertBenchmarkEntry: (entry: Omit<BenchmarkEntry, 'updatedAt'>) => void;
   addProgressionEvent: (event: ProgressionEvent) => void;
 }
 
