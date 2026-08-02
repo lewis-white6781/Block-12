@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { startSyncTriggers } from '../sync/syncEngine';
 
 type AuthState = 'checking' | 'signed-out' | 'code-sent' | 'signed-in';
 
@@ -30,6 +31,13 @@ export default function Auth({ children }: { children: ReactNode }) {
 
     return () => subscription.subscription.unsubscribe();
   }, []);
+
+  // Start/stop the sync engine's triggers based on auth state.
+  useEffect(() => {
+    if (authState !== 'signed-in') return;
+    const stop = startSyncTriggers();
+    return stop;
+  }, [authState]);
 
   async function handleSendCode() {
     setError(null);

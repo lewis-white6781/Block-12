@@ -1,5 +1,5 @@
 // SPEC.md section 7.7 ("Settings / More").
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { useStore } from '../store/useStore';
 import {
@@ -14,6 +14,20 @@ import {
 import { generateDemoState } from '../dev/demoSeed';
 import { convertWeight, parseWeight } from '../domain/units';
 import type { WeightUnit } from '../domain/units';
+import { supabase } from '../lib/supabaseClient';
+import { runSync } from '../sync/syncEngine';
+import { useSyncStore } from '../sync/syncStore';
+
+function timeAgo(iso: string): string {
+  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -40,6 +54,19 @@ export default function Settings() {
   const [importErr, setImportErr] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [demoLoaded, setDemoLoaded] = useState(false);
+
+  const syncStatus = useSyncStore((s) => s.status);
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+  const lastSyncError = useSyncStore((s) => s.lastError);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null));
+  }, []);
+
+  function handleSignOut() {
+    void supabase.auth.signOut();
+  }
 
   function handleExportJSON() {
     downloadJSONExport(state);
@@ -213,9 +240,44 @@ export default function Settings() {
       </section>
 
       <section className="mt-4 rounded border border-line bg-surface p-3">
+        <h2 className="text-xs uppercase tracking-wide text-muted">Sync</h2>
+        {userEmail && (
+          <p className="mt-1 text-xs text-muted">
+            Signed in as <span className="text-text">{userEmail}</span>
+          </p>
+        )}
+        <p className="mt-1 text-xs text-muted">
+          {syncStatus === 'syncing' && 'Syncing…'}
+          {syncStatus === 'idle' && lastSyncedAt && `Synced ${timeAgo(lastSyncedAt)}`}
+          {syncStatus === 'idle' && !lastSyncedAt && 'Not synced yet'}
+          {syncStatus === 'offline' && 'Offline — will retry when reconnected'}
+          {syncStatus === 'error' && (
+            <span className="text-bad">Sync error: {lastSyncError ?? 'unknown'}</span>
+          )}
+        </p>
+        <div className="mt-3 space-y-2">
+          <button
+            type="button"
+            onClick={() => void runSync()}
+            disabled={syncStatus === 'syncing'}
+            className="min-h-11 w-full rounded border border-line text-sm text-text disabled:opacity-40"
+          >
+            {syncStatus === 'syncing' ? 'Syncing…' : 'Sync now'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="min-h-11 w-full rounded border border-line text-sm text-text"
+          >
+            Sign out
+          </button>
+        </div>
+      </section>
+
+      <section className="mt-4 rounded border border-line bg-surface p-3">
         <h2 className="text-xs uppercase tracking-wide text-muted">Your data</h2>
         <p className="mt-1 text-xs text-muted">
-          Everything lives on this device only. Export regularly — this is your backup.
+          Synced automatically to your account. Export is still your offline backup.
         </p>
         <div className="mt-3 space-y-2">
           <button
@@ -317,8 +379,8 @@ export default function Settings() {
         <h2 className="text-xs uppercase tracking-wide text-muted">About</h2>
         <p className="mt-2 text-sm text-text">BLOCK 12</p>
         <p className="mt-1 text-xs text-muted">
-          A fixed 12-week calisthenics and cut block. Offline-first, single-user, no account, no
-          server. All data stored locally under <code>{STORAGE_KEY}</code>.
+          A fixed 12-week calisthenics and cut block. Offline-first, single-user account synced
+          across your devices. Local copy stored under <code>{STORAGE_KEY}</code>.
         </p>
       </section>
     </div>
