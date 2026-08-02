@@ -1,6 +1,8 @@
 // Minimal offline service worker for BLOCK 12 (SPEC.md 2, 7.7).
-// No backend, no network calls at runtime for app data — this only caches the
-// static app shell so the installed PWA opens with the phone in airplane mode.
+// Caches the static app shell only, so the installed PWA opens with the phone
+// in airplane mode. As of v2.0, sync/auth calls go to Supabase — those are
+// cross-origin requests and pass straight through uncached (see the origin
+// check below), so this worker never sees or caches auth/session data.
 const CACHE_VERSION = 'block12-shell-v1';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 
@@ -23,6 +25,8 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  // Cross-origin passthrough — this is what keeps Supabase's auth/sync fetches
+  // uncached and unintercepted. Do not "fix" this into caching those responses.
   if (url.origin !== self.location.origin) return;
 
   // Hash-router SPA: every navigation loads the same document, route lives in
