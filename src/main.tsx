@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { supabase } from './lib/supabaseClient'
+import { startUpdateWatcher } from './pwa/updates'
 
 // A magic-link sign-in redirects back here with tokens in the URL hash
 // (#access_token=...&type=magiclink), but HashRouter also reads location.hash
@@ -27,11 +28,13 @@ async function bootstrap() {
 
 bootstrap();
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// v3.0 (SPEC-V3.0.md section 5): registration moves into startUpdateWatcher,
+// which also keeps the worker checked and decides when it is safe to swap.
+// The bare register() this replaces had no updatefound listener, no periodic
+// check and no way to reload into a new build, so a deployed update could sit
+// undetected on an installed PWA indefinitely.
+if (import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // Offline install still works without the SW on repeat visits via HTTP cache;
-      // nothing user-facing to do if registration itself fails.
-    });
+    startUpdateWatcher();
   });
 }

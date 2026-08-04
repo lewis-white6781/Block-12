@@ -7,6 +7,7 @@ import Program from './screens/Program';
 import Review from './screens/Review';
 import Settings from './screens/Settings';
 import Auth from './screens/Auth';
+import UpdateToast from './components/UpdateToast';
 
 const TABS = [
   { to: '/', label: 'Today' },
@@ -79,6 +80,7 @@ function App() {
           </Route>
           <Route path="/session/:date/:block" element={<SessionRunner />} />
         </Routes>
+        <UpdateToast />
       </HashRouter>
     </Auth>
   );

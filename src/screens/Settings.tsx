@@ -21,6 +21,8 @@ import { useToday } from '../hooks/useToday';
 import { supabase } from '../lib/supabaseClient';
 import { runSync } from '../sync/syncEngine';
 import { useSyncStore } from '../sync/syncStore';
+import { checkForUpdateNow } from '../pwa/updates';
+import { useUpdateStore } from '../pwa/updateStore';
 import { inputClass } from '../styles/ui';
 import PhaseBadge from '../components/PhaseBadge';
 import Card from '../components/Card';
@@ -61,6 +63,11 @@ export default function Settings() {
   const [importErr, setImportErr] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [demoLoaded, setDemoLoaded] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  const appVersion = useUpdateStore((s) => s.version);
+  const buildId = useUpdateStore((s) => s.buildId);
+  const updatePhase = useUpdateStore((s) => s.phase);
 
   const syncStatus = useSyncStore((s) => s.status);
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
@@ -397,11 +404,41 @@ export default function Settings() {
 
       <Card className="mt-4">
         <SectionHeader>About</SectionHeader>
-        <p className="mt-2 text-sm text-text">BLOCK 12</p>
+        <div className="mt-2 flex items-baseline justify-between gap-2">
+          <p className="text-sm text-text">BLOCK 12</p>
+          {/* Which build is actually running, readable from the device
+              (SPEC-V3.0.md section 5). Before v3.0 there was no version
+              anywhere in the app, so "is my phone on the new one?" was
+              unanswerable without opening devtools. */}
+          <p className="shrink-0 text-xs tabular-nums text-muted">
+            v{appVersion} · {buildId}
+          </p>
+        </div>
         <p className="mt-1 text-xs text-muted">
           A fixed 12-week calisthenics and cut block. Offline-first, single-user account synced
           across your devices. Local copy stored under <code>{STORAGE_KEY}</code>.
         </p>
+
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
+          <span className="text-xs text-muted">
+            {updatePhase === 'ready'
+              ? 'Update ready — applies when you leave this session.'
+              : updatePhase === 'applying'
+                ? 'Updating…'
+                : 'Up to date.'}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setCheckingUpdate(true);
+              void checkForUpdateNow().finally(() => setCheckingUpdate(false));
+            }}
+            disabled={checkingUpdate || updatePhase === 'applying'}
+            className="min-h-11 shrink-0 rounded border border-line px-3 text-xs text-text disabled:opacity-40"
+          >
+            {checkingUpdate ? 'Checking…' : 'Check for updates'}
+          </button>
+        </div>
       </Card>
       </div>
     </div>
