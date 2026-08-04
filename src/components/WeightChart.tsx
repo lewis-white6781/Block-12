@@ -12,6 +12,8 @@ import {
   YAxis,
 } from 'recharts';
 import { projectedWeekTwelveWeight, rolling7Weight } from '../domain/body';
+import { round2 } from '../domain/format';
+import { axisFormatter, tooltipFormatter } from './chartFormat';
 import { convertWeight } from '../domain/units';
 import type { WeightUnit } from '../domain/units';
 import type { DailyEntry, Settings } from '../domain/types';
@@ -38,6 +40,13 @@ export default function WeightChart({ entries, settings, today, unit }: WeightCh
 
   // All math here stays kg-native (SPEC-V1.1.md section 3); conversion to the
   // display unit happens once, per point, right before handing data to recharts.
+  //
+  // Every value is round2'd on the way out. recharts prints whatever number it
+  // is given, so an unrounded corridor bound rendered as "76.94642857142858" in
+  // the tooltip — SPEC-V3.0.md section 7's 2 dp ceiling applies to chart data,
+  // not just to text.
+  const display = (kg: number) => round2(convertWeight(kg, unit));
+
   const data: ChartPoint[] = Array.from({ length: BLOCK_DAYS }, (_, i) => {
     const date = format(addDays(start, i), 'yyyy-MM-dd');
     const t = i / (BLOCK_DAYS - 1);
@@ -49,9 +58,9 @@ export default function WeightChart({ entries, settings, today, unit }: WeightCh
     const rolling = date <= today ? rolling7Weight(entries, date) : null;
     return {
       date,
-      actual: entry?.weightKg !== undefined ? convertWeight(entry.weightKg, unit) : undefined,
-      rolling: rolling !== null ? convertWeight(rolling, unit) : undefined,
-      corridorBand: [convertWeight(corridorMid - 1, unit), convertWeight(corridorMid + 1, unit)] as [number, number],
+      actual: entry?.weightKg !== undefined ? display(entry.weightKg) : undefined,
+      rolling: rolling !== null ? display(rolling) : undefined,
+      corridorBand: [display(corridorMid - 1), display(corridorMid + 1)] as [number, number],
     };
   });
 
@@ -60,8 +69,8 @@ export default function WeightChart({ entries, settings, today, unit }: WeightCh
   if (projectedWeight !== null && currentRolling !== null) {
     const todayIndex = data.findIndex((d) => d.date === today);
     if (todayIndex >= 0) {
-      data[todayIndex].projected = convertWeight(currentRolling, unit);
-      data[BLOCK_DAYS - 1].projected = convertWeight(projectedWeight, unit);
+      data[todayIndex].projected = display(currentRolling);
+      data[BLOCK_DAYS - 1].projected = display(projectedWeight);
     }
   }
 
@@ -79,6 +88,7 @@ export default function WeightChart({ entries, settings, today, unit }: WeightCh
         />
         <YAxis
           domain={['dataMin - 1', 'dataMax + 1']}
+          tickFormatter={axisFormatter(1)}
           tick={{ fill: 'var(--muted)', fontSize: 10 }}
           axisLine={{ stroke: 'var(--line)' }}
           tickLine={false}
@@ -92,9 +102,11 @@ export default function WeightChart({ entries, settings, today, unit }: WeightCh
             color: 'var(--text)',
           }}
           labelFormatter={(d) => format(parseISO(d as string), 'EEE d MMM')}
+          formatter={tooltipFormatter(1, unit)}
         />
         <Area
           dataKey="corridorBand"
+          name="Corridor"
           stroke="none"
           fill="var(--good)"
           fillOpacity={0.1}
@@ -102,6 +114,7 @@ export default function WeightChart({ entries, settings, today, unit }: WeightCh
         />
         <Line
           dataKey="rolling"
+          name="7-day avg"
           stroke="var(--good)"
           strokeWidth={2}
           dot={false}
@@ -110,12 +123,14 @@ export default function WeightChart({ entries, settings, today, unit }: WeightCh
         />
         <Line
           dataKey="actual"
+          name="Weight"
           stroke="none"
           dot={{ r: 4, fill: 'var(--text)', strokeWidth: 0 }}
           isAnimationActive={false}
         />
         <Line
           dataKey="projected"
+          name="Projected"
           stroke="var(--muted)"
           strokeWidth={2}
           strokeDasharray="4 4"

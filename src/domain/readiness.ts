@@ -1,6 +1,7 @@
 // Autoregulation, joint-irritation volume warnings, optional-second-run gate —
 // SPEC.md sections 6.9 (gate), 6.10.
 import { program } from '../data/program';
+import { fmt, fmtPct } from './format';
 import { computeSetScore, exerciseSessionBest } from './scoring';
 import type { DayId, Readiness, SessionLog } from './types';
 
@@ -105,7 +106,7 @@ function sprintCondition(sessionLogs: Record<string, SessionLog>): OptionalRunCo
     id: 'sprint',
     label,
     met,
-    detail: `Latest ${latestScore.toFixed(0)} vs recent best ${priorBest.toFixed(0)}.`,
+    detail: `Latest ${fmt(latestScore, 0)} vs recent best ${fmt(priorBest, 0)}.`,
   };
 }
 
@@ -123,7 +124,7 @@ function weeklyRateCondition(weeklyRatePct: number | null): OptionalRunCondition
   const label = '|Weekly weight-change rate| ≤0.6%';
   if (weeklyRatePct === null) return { id: 'rate', label, met: false, detail: 'Not enough weight history yet.' };
   const met = Math.abs(weeklyRatePct) <= 0.6;
-  return { id: 'rate', label, met, detail: `${weeklyRatePct.toFixed(2)}%/wk.` };
+  return { id: 'rate', label, met, detail: `${fmtPct(weeklyRatePct)}/wk.` };
 }
 
 function sleepAndMotivationCondition(recentReadiness: Readiness[]): OptionalRunCondition {
@@ -135,7 +136,7 @@ function sleepAndMotivationCondition(recentReadiness: Readiness[]): OptionalRunC
   const meanSleep = last3.reduce((sum, r) => sum + r.sleepHours, 0) / last3.length;
   const motivation = last3[0].motivation;
   const met = meanSleep >= 7 && motivation >= 2;
-  return { id: 'sleep', label, met, detail: `Sleep ${meanSleep.toFixed(1)}h, motivation ${motivation}.` };
+  return { id: 'sleep', label, met, detail: `Sleep ${fmt(meanSleep, 1)}h, motivation ${motivation}.` };
 }
 
 /**

@@ -19,6 +19,7 @@ import {
 } from '../domain/scoring';
 import type { DayId, Exercise, Ladder, SessionLog } from '../domain/types';
 import ProgressChart from '../components/ProgressChart';
+import { axisFormatter, tooltipFormatter } from '../components/chartFormat';
 import Sheet from '../components/Sheet';
 import PhaseBadge from '../components/PhaseBadge';
 import Card from '../components/Card';
@@ -373,10 +374,17 @@ export default function Progress() {
               axisLine={{ stroke: 'var(--line)' }}
               tickLine={false}
             />
-            <YAxis tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--line)' }} tickLine={false} width={24} />
+            <YAxis
+              tickFormatter={axisFormatter(1)}
+              tick={{ fill: 'var(--muted)', fontSize: 10 }}
+              axisLine={{ stroke: 'var(--line)' }}
+              tickLine={false}
+              width={24}
+            />
             <Tooltip
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
               labelFormatter={(w) => `Week ${w}`}
+              formatter={tooltipFormatter(2)}
             />
             {SKILLS.map((skill) => (
               <Line
@@ -472,6 +480,7 @@ export default function Progress() {
               />
               <Tooltip
                 contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
+                formatter={tooltipFormatter(0)}
               />
               <Bar dataKey="count" fill="var(--warn)" radius={[0, 4, 4, 0]} maxBarSize={16} isAnimationActive={false} />
             </BarChart>

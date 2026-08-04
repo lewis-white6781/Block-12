@@ -13,7 +13,9 @@ import {
 } from '../domain/body';
 import { currentWeek, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
-import { convertWeight } from '../domain/units';
+import { fmt, fmtPct } from '../domain/format';
+import { tooltipFormatter } from '../components/chartFormat';
+import { fmtKg, fmtKgSigned } from '../domain/units';
 import DailyEntryFields from '../components/DailyEntryFields';
 import WeightChart from '../components/WeightChart';
 import Stat from '../components/Stat';
@@ -104,19 +106,15 @@ export default function Body() {
         </div>
         <WeightChart entries={entriesArray} settings={settings} today={todayStr} unit={unit} />
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <Stat label="7-day avg" value={rolling !== null ? `${convertWeight(rolling, unit).toFixed(1)} ${unit}` : '—'} />
+          <Stat label="7-day avg" value={rolling !== null ? `${fmtKg(rolling, unit)} ${unit}` : '—'} />
           <Stat
             label="Rate"
-            value={rate !== null ? `${rate <= 0 ? '−' : '+'}${Math.abs(convertWeight(rate, unit)).toFixed(2)} ${unit}/wk` : '—'}
+            value={rate !== null ? `${fmtKgSigned(rate, unit)} ${unit}/wk` : '—'}
           />
           <Stat
             label="Wk 12 projection"
-            value={projected !== null ? `${convertWeight(projected, unit).toFixed(1)} ${unit}` : '—'}
-            sublabel={
-              totalChange !== null
-                ? `${totalChange <= 0 ? '−' : '+'}${Math.abs(convertWeight(totalChange, unit)).toFixed(1)} ${unit} so far`
-                : undefined
-            }
+            value={projected !== null ? `${fmtKg(projected, unit)} ${unit}` : '—'}
+            sublabel={totalChange !== null ? `${fmtKgSigned(totalChange, unit, 1)} ${unit} so far` : undefined}
           />
         </div>
       </Card>
@@ -130,6 +128,7 @@ export default function Body() {
             <YAxis hide domain={[0, 'dataMax + 200']} />
             <Tooltip
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
+              formatter={tooltipFormatter(0)}
             />
             <Bar dataKey="calories" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
@@ -154,6 +153,7 @@ export default function Body() {
             />
             <Tooltip
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
+              formatter={tooltipFormatter(0)}
             />
             <ReferenceArea y1={settings.proteinTargetLow} y2={settings.proteinTargetHigh} fill="var(--good)" fillOpacity={0.15} />
             <Bar dataKey="proteinG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
@@ -181,6 +181,7 @@ export default function Body() {
             />
             <Tooltip
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
+              formatter={tooltipFormatter(0)}
             />
             {settings.carbTargetLow !== undefined && settings.carbTargetHigh !== undefined && (
               <ReferenceArea y1={settings.carbTargetLow} y2={settings.carbTargetHigh} fill="var(--good)" fillOpacity={0.15} />
@@ -210,6 +211,7 @@ export default function Body() {
             />
             <Tooltip
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
+              formatter={tooltipFormatter(0)}
             />
             {settings.fatTargetLow !== undefined && settings.fatTargetHigh !== undefined && (
               <ReferenceArea y1={settings.fatTargetLow} y2={settings.fatTargetHigh} fill="var(--good)" fillOpacity={0.15} />
@@ -239,19 +241,15 @@ export default function Body() {
             {weeks.map((w) => (
               <tr key={w.week} className="border-t border-line">
                 <td className="py-1 pr-2">{w.week}</td>
+                <td className="py-1 pr-2">{w.meanWeightKg !== null ? fmtKg(w.meanWeightKg, unit) : '—'}</td>
                 <td className="py-1 pr-2">
-                  {w.meanWeightKg !== null ? convertWeight(w.meanWeightKg, unit).toFixed(1) : '—'}
+                  {w.changeKg !== null ? fmtKgSigned(w.changeKg, unit, 1) : '—'}
                 </td>
-                <td className="py-1 pr-2">
-                  {w.changeKg !== null
-                    ? `${w.changeKg <= 0 ? '−' : '+'}${Math.abs(convertWeight(w.changeKg, unit)).toFixed(1)}`
-                    : '—'}
-                </td>
-                <td className="py-1 pr-2">{w.ratePct !== null ? `${w.ratePct.toFixed(2)}%` : '—'}</td>
-                <td className="py-1 pr-2">{w.meanCalories?.toFixed(0) ?? '—'}</td>
-                <td className="py-1 pr-2">{w.meanProteinG?.toFixed(0) ?? '—'}</td>
-                <td className="py-1 pr-2">{w.meanCarbsG?.toFixed(0) ?? '—'}</td>
-                <td className="py-1 pr-2">{w.meanFatG?.toFixed(0) ?? '—'}</td>
+                <td className="py-1 pr-2">{w.ratePct !== null ? fmtPct(w.ratePct) : '—'}</td>
+                <td className="py-1 pr-2">{w.meanCalories !== null ? fmt(w.meanCalories, 0) : '—'}</td>
+                <td className="py-1 pr-2">{w.meanProteinG !== null ? fmt(w.meanProteinG, 0) : '—'}</td>
+                <td className="py-1 pr-2">{w.meanCarbsG !== null ? fmt(w.meanCarbsG, 0) : '—'}</td>
+                <td className="py-1 pr-2">{w.meanFatG !== null ? fmt(w.meanFatG, 0) : '—'}</td>
                 <td className="py-1">{w.sessionsCompleted}</td>
               </tr>
             ))}

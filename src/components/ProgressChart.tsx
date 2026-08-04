@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts';
 import { rolling7Weight } from '../domain/body';
+import { axisFormatter, tooltipFormatter } from './chartFormat';
 import { effectiveLevelForSet } from '../domain/difficulty';
 import { phaseForWeek } from '../domain/phase';
 import { computeSetScore, est1RMrelative, isQualifyingSet } from '../domain/scoring';
@@ -145,6 +146,7 @@ export default function ProgressChart({ exercise, ladder, sessionLogs, dailyEntr
               tickLine={false}
             />
             <YAxis
+              tickFormatter={axisFormatter(1)}
               tick={{ fill: 'var(--muted)', fontSize: 10 }}
               axisLine={{ stroke: 'var(--line)' }}
               tickLine={false}
@@ -159,6 +161,7 @@ export default function ProgressChart({ exercise, ladder, sessionLogs, dailyEntr
                 color: 'var(--text)',
               }}
               labelFormatter={(w) => `Week ${w}`}
+              formatter={tooltipFormatter(2)}
             />
             <Line
               dataKey={metric}

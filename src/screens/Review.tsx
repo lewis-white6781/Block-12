@@ -8,7 +8,8 @@ import { weeklyProgressionVariables } from '../data/mobility';
 import { currentWeek, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
 import { rolling7Weight } from '../domain/body';
-import { convertWeight } from '../domain/units';
+import { fmt } from '../domain/format';
+import { fmtKg, fmtKgSigned } from '../domain/units';
 import { buildExerciseHistory, computeSetScore, exerciseProgressIndex } from '../domain/scoring';
 import { buildWeeklyReview, checkEndOfBlockTargets } from '../domain/review';
 import type { TargetStatus } from '../domain/review';
@@ -113,7 +114,7 @@ export default function Review() {
             label="Mean"
             value={
               review.weight.meanKg !== null
-                ? `${convertWeight(review.weight.meanKg, settings.weightUnit).toFixed(1)} ${settings.weightUnit}`
+                ? `${fmtKg(review.weight.meanKg, settings.weightUnit)} ${settings.weightUnit}`
                 : '—'
             }
           />
@@ -121,7 +122,7 @@ export default function Review() {
             label="Rate"
             value={
               review.weight.rateKgPerWeek !== null
-                ? `${review.weight.rateKgPerWeek <= 0 ? '−' : '+'}${Math.abs(convertWeight(review.weight.rateKgPerWeek, settings.weightUnit)).toFixed(2)} ${settings.weightUnit}/wk`
+                ? `${fmtKgSigned(review.weight.rateKgPerWeek, settings.weightUnit)} ${settings.weightUnit}/wk`
                 : '—'
             }
           />
@@ -135,15 +136,15 @@ export default function Review() {
           <Stat label="Protein in range" value={`${review.nutrition.proteinAdherenceDays}/7 days`} />
           <Stat
             label="Mean kcal"
-            value={review.nutrition.meanCalories !== null ? review.nutrition.meanCalories.toFixed(0) : '—'}
+            value={review.nutrition.meanCalories !== null ? fmt(review.nutrition.meanCalories, 0) : '—'}
           />
           <Stat
             label="Mean carbs"
-            value={review.nutrition.meanCarbsG !== null ? `${review.nutrition.meanCarbsG.toFixed(0)} g` : '—'}
+            value={review.nutrition.meanCarbsG !== null ? `${fmt(review.nutrition.meanCarbsG, 0)} g` : '—'}
           />
           <Stat
             label="Mean fat"
-            value={review.nutrition.meanFatG !== null ? `${review.nutrition.meanFatG.toFixed(0)} g` : '—'}
+            value={review.nutrition.meanFatG !== null ? `${fmt(review.nutrition.meanFatG, 0)} g` : '—'}
           />
         </div>
       </Card>

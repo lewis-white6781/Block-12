@@ -8,7 +8,8 @@ import { ladders } from '../data/ladders';
 import { currentWeek, exercisesFor, resolvePrescription } from '../domain/phase';
 import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
 import { checkStopRule } from '../domain/analysis';
-import { convertWeight, parseWeight } from '../domain/units';
+import { convertWeight, fmtKg, parseWeight } from '../domain/units';
+import { roundTo } from '../domain/format';
 import { newId } from '../domain/id';
 import type { WeightUnit } from '../domain/units';
 import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
@@ -37,7 +38,7 @@ function formatLastTime(sets: SetLog[], metric: Exercise['metric'], unit: Weight
     return sets.map((s) => s.seconds ?? '—').join(',') + 's';
   const reps = sets.map((s) => s.reps ?? '—').join(',');
   const kg = sets[sets.length - 1]?.addedKg;
-  return kg ? `${reps} @ +${convertWeight(kg, unit).toFixed(1)} ${unit}` : reps;
+  return kg ? `${reps} @ +${fmtKg(kg, unit)} ${unit}` : reps;
 }
 
 function formatLoggedSet(set: SetLog, metric: Exercise['metric']): string {
@@ -286,7 +287,7 @@ export default function SessionRunner() {
               onClick={() => setPadField('kg')}
               className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-left tabular-nums text-text"
             >
-              {convertWeight(addedKg ?? 0, settings.weightUnit).toFixed(1)}
+              {fmtKg(addedKg ?? 0, settings.weightUnit)}
             </button>
           </label>
         )}
@@ -366,7 +367,7 @@ export default function SessionRunner() {
       <NumberPad
         open={padField === 'kg'}
         label={`Added ${settings.weightUnit}`}
-        value={addedKg !== undefined ? Number(convertWeight(addedKg, settings.weightUnit).toFixed(1)) : undefined}
+        value={addedKg !== undefined ? roundTo(convertWeight(addedKg, settings.weightUnit), 1) : undefined}
         allowDecimal
         onConfirm={(v) => setAddedKg(parseWeight(v, settings.weightUnit))}
         onClose={() => setPadField(null)}

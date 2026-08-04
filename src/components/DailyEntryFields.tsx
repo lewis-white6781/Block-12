@@ -5,7 +5,8 @@
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { caloriesFromMacros, corridorStatus, rolling7Weight, weeklyRateKg } from '../domain/body';
-import { convertWeight, parseWeight } from '../domain/units';
+import { convertWeight, fmtKg, fmtKgSigned, parseWeight } from '../domain/units';
+import { roundTo } from '../domain/format';
 import type { DailyEntry } from '../domain/types';
 import NumberPad from './NumberPad';
 
@@ -32,7 +33,8 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
   const rate = weeklyRateKg(entriesArray, date);
   const status = corridorStatus(rate);
 
-  const displayWeightKg = entry?.weightKg !== undefined ? Number(convertWeight(entry.weightKg, unit).toFixed(1)) : undefined;
+  // Numeric (not string) — this feeds NumberPad's initial value, not a label.
+  const displayWeightKg = entry?.weightKg !== undefined ? roundTo(convertWeight(entry.weightKg, unit), 1) : undefined;
 
   const computedCalories = caloriesFromMacros(entry?.proteinG ?? 0, entry?.carbsG ?? 0, entry?.fatG ?? 0);
   const hasAnyMacro = entry?.proteinG !== undefined || entry?.carbsG !== undefined || entry?.fatG !== undefined;
@@ -85,9 +87,8 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
 
       {showSummary && rolling !== null && (
         <p className="mt-2 text-xs text-muted">
-          7-day avg {convertWeight(rolling, unit).toFixed(1)} {unit}
-          {rate !== null &&
-            ` · ${rate <= 0 ? '−' : '+'}${Math.abs(convertWeight(rate, unit)).toFixed(2)} ${unit}/wk`}
+          7-day avg {fmtKg(rolling, unit)} {unit}
+          {rate !== null && ` · ${fmtKgSigned(rate, unit)} ${unit}/wk`}
           {status === 'onTrack' && ' ✓'}
         </p>
       )}

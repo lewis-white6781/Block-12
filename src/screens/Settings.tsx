@@ -14,6 +14,7 @@ import {
 } from '../store/persist';
 import { generateDemoState } from '../dev/demoSeed';
 import { convertWeight, parseWeight } from '../domain/units';
+import { roundTo } from '../domain/format';
 import type { WeightUnit } from '../domain/units';
 import { currentWeek, phaseForWeek } from '../domain/phase';
 import { startOfToday } from '../domain/clock';
@@ -46,7 +47,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function displayWeight(kg: number, unit: WeightUnit): number {
-  return Number(convertWeight(kg, unit).toFixed(1));
+  return roundTo(convertWeight(kg, unit), 1);
 }
 
 export default function Settings() {
