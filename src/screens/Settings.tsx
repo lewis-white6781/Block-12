@@ -1,6 +1,7 @@
 // SPEC.md section 7.7 ("Settings / More").
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import {
   defaultPersistedState,
@@ -14,9 +15,15 @@ import {
 import { generateDemoState } from '../dev/demoSeed';
 import { convertWeight, parseWeight } from '../domain/units';
 import type { WeightUnit } from '../domain/units';
+import { currentWeek, phaseForWeek } from '../domain/phase';
+import { startOfToday } from '../domain/clock';
 import { supabase } from '../lib/supabaseClient';
 import { runSync } from '../sync/syncEngine';
 import { useSyncStore } from '../sync/syncStore';
+import { inputClass } from '../styles/ui';
+import PhaseBadge from '../components/PhaseBadge';
+import Card from '../components/Card';
+import SectionHeader from '../components/SectionHeader';
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -38,17 +45,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const inputClass =
-  'min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-base tabular-nums text-text';
-
 function displayWeight(kg: number, unit: WeightUnit): number {
   return Number(convertWeight(kg, unit).toFixed(1));
 }
 
 export default function Settings() {
+  const navigate = useNavigate();
   const state = useStore();
   const { settings, updateSettings } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const week = currentWeek(startOfToday(), settings.blockStartDate);
 
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
@@ -105,14 +111,19 @@ export default function Settings() {
   function handleResetConfirmed() {
     useStore.setState(defaultPersistedState());
     setConfirmingReset(false);
+    void runSync(); // push the fresh empty state to the cloud immediately, don't wait for the next trigger
+    navigate('/'); // force Today/Review's stale local date/week state to recompute from the new blockStartDate
   }
 
   return (
-    <div className="p-4 pb-8">
+    <div className="flex h-full flex-col">
+      <PhaseBadge week={week} phase={phaseForWeek(week)} dateLabel="Settings" />
+
+      <div className="flex-1 overflow-y-auto p-4 pb-8">
       <h1 className="font-display text-2xl text-text">More</h1>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted">Block</h2>
+      <Card className="mt-4">
+        <SectionHeader>Block</SectionHeader>
         <div className="mt-2 space-y-3">
           <Field label="Block start date (Monday of week 1)">
             <input
@@ -123,10 +134,10 @@ export default function Settings() {
             />
           </Field>
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted">Weight & nutrition</h2>
+      <Card className="mt-4">
+        <SectionHeader>Weight & nutrition</SectionHeader>
         <div className="mt-2">
           <Field label="Weight unit">
             <div className="flex gap-2">
@@ -237,10 +248,10 @@ export default function Settings() {
             />
           </Field>
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted">Sync</h2>
+      <Card className="mt-4">
+        <SectionHeader>Sync</SectionHeader>
         {userEmail && (
           <p className="mt-1 text-xs text-muted">
             Signed in as <span className="text-text">{userEmail}</span>
@@ -272,10 +283,10 @@ export default function Settings() {
             Sign out
           </button>
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted">Your data</h2>
+      <Card className="mt-4">
+        <SectionHeader>Your data</SectionHeader>
         <p className="mt-1 text-xs text-muted">
           Synced automatically to your account. Export is still your offline backup.
         </p>
@@ -318,30 +329,31 @@ export default function Settings() {
             Download CSV of daily entries
           </button>
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-bad bg-surface p-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted">Danger zone</h2>
+      <Card className="mt-4" variant="danger">
+        <SectionHeader>Danger zone</SectionHeader>
         {!confirmingReset ? (
           <button
             type="button"
             onClick={() => setConfirmingReset(true)}
             className="mt-3 min-h-11 w-full rounded border border-bad text-sm text-bad"
           >
-            Reset block
+            Reset block — start over today
           </button>
         ) : (
           <div className="mt-3 space-y-2">
             <p className="text-sm text-text">
-              This permanently deletes every session, entry, and setting on this device. Export
-              first if you want to keep it.
+              This permanently deletes every session, entry, and setting, then starts a brand new
+              block from this week's Monday. Your synced account will be updated to match
+              immediately. Export first if you want to keep this block's data.
             </p>
             <button
               type="button"
               onClick={handleResetConfirmed}
               className="min-h-11 w-full rounded bg-bad text-base font-medium text-bg"
             >
-              Yes, delete everything
+              Yes, reset and start over
             </button>
             <button
               type="button"
@@ -352,11 +364,11 @@ export default function Settings() {
             </button>
           </div>
         )}
-      </section>
+      </Card>
 
       {import.meta.env.DEV && (
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <h2 className="text-xs uppercase tracking-wide text-muted">Developer (dev build only)</h2>
+        <Card className="mt-4">
+          <SectionHeader>Developer (dev build only)</SectionHeader>
           <p className="mt-1 text-xs text-muted">
             Seeds 6 weeks of plausible sessions, weights and calories so every chart has data.
             Overwrites whatever is currently on this device.
@@ -372,17 +384,18 @@ export default function Settings() {
             Load demo block
           </button>
           {demoLoaded && <p className="mt-2 text-xs text-good">Demo block loaded.</p>}
-        </section>
+        </Card>
       )}
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted">About</h2>
+      <Card className="mt-4">
+        <SectionHeader>About</SectionHeader>
         <p className="mt-2 text-sm text-text">BLOCK 12</p>
         <p className="mt-1 text-xs text-muted">
           A fixed 12-week calisthenics and cut block. Offline-first, single-user account synced
           across your devices. Local copy stored under <code>{STORAGE_KEY}</code>.
         </p>
-      </section>
+      </Card>
+      </div>
     </div>
   );
 }
