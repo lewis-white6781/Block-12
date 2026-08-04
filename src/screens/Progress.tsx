@@ -4,6 +4,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore } from '../store/useStore';
 import { dayTitles, program } from '../data/program';
+import { exerciseName } from '../data/exercises';
 import { ladders } from '../data/ladders';
 import { currentWeek, dayIdForDate, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
@@ -283,7 +284,7 @@ export default function Progress() {
     return Array.from(counts.entries())
       .map(([exerciseId, count]) => ({
         exerciseId,
-        name: program.find((e) => e.id === exerciseId)?.name ?? exerciseId,
+        name: exerciseName(exerciseId),
         count,
       }))
       .sort((a, b) => b.count - a.count)
@@ -421,7 +422,7 @@ export default function Progress() {
                 .sort((a, b) => (a.date < b.date ? 1 : -1))
                 .map((event) => (
                   <li key={event.id}>
-                    {event.date} · {program.find((e) => e.id === event.exerciseId)?.name ?? event.exerciseId} —{' '}
+                    {event.date} · {exerciseName(event.exerciseId)} —{' '}
                     {event.axis}: {event.from} → {event.to}
                   </li>
                 ))}

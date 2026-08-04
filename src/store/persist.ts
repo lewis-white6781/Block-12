@@ -2,7 +2,7 @@
 // Storage key `block12:v1`, with `schemaVersion` and a real migrate() so a schema
 // change never wipes a block mid-flight.
 import { format, startOfWeek } from 'date-fns';
-import { program } from '../data/program';
+import { exerciseName } from '../data/exercises';
 import { startOfToday, todayISO } from '../domain/clock';
 import { placeholderSetScore } from '../domain/scoring';
 import type {
@@ -285,8 +285,6 @@ function csvEscape(value: unknown): string {
   return str;
 }
 
-const exerciseNameById = new Map(program.map((e) => [e.id, e.name]));
-
 export function buildSetsCSV(sessionLogs: Record<string, SessionLog>): string {
   const rows: string[] = [CSV_HEADERS.join(',')];
   const sessions = Object.values(sessionLogs).sort((a, b) => a.date.localeCompare(b.date));
@@ -302,7 +300,7 @@ export function buildSetsCSV(sessionLogs: Record<string, SessionLog>): string {
             session.block,
             session.completedAt ?? '',
             exerciseLog.exerciseId,
-            exerciseNameById.get(exerciseLog.exerciseId) ?? exerciseLog.exerciseId,
+            exerciseName(exerciseLog.exerciseId),
             index + 1,
             set.reps,
             set.seconds,

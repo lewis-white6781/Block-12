@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { program } from '../data/program';
+import { exerciseName } from '../data/exercises';
 import { ladders } from '../data/ladders';
 import { targets } from '../data/targets';
 import { weeklyProgressionVariables } from '../data/mobility';
@@ -191,7 +192,7 @@ export default function Review() {
                 key={`stop-${i}`}
                 className={`rounded px-2 py-1 ${s.result.severity === 'red' ? 'bg-bad text-bg' : 'bg-warn text-bg'}`}
               >
-                {program.find((e) => e.id === s.exerciseId)?.name ?? s.exerciseId}: {s.result.message}
+                {exerciseName(s.exerciseId)}: {s.result.message}
               </div>
             ))}
             {review.firedFlags.oneVariableOverrides > 0 && (

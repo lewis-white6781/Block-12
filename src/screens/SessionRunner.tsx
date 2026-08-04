@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { parseISO } from 'date-fns';
 import { useStore, findPreviousExerciseLog } from '../store/useStore';
 import { program } from '../data/program';
+import { lookupExercise } from '../data/exercises';
 import { ladders } from '../data/ladders';
 import { currentWeek, exercisesFor, resolvePrescription } from '../domain/phase';
 import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
@@ -64,7 +65,20 @@ export default function SessionRunner() {
 
   const exercises = useMemo(() => {
     if (!session) return [];
-    return exercisesFor(program, session.day, session.block, session.week);
+    const prescribed = exercisesFor(program, session.day, session.block, session.week);
+
+    // Anything already logged into this session but no longer prescribed for
+    // the day — a retired exercise, or one moved to another slot — is appended
+    // after the prescribed list. Without this, reopening a session logged
+    // under earlier programming would silently hide those sets and make them
+    // uneditable (SPEC-V3.0.md section 3).
+    const prescribedIds = new Set(prescribed.map((e) => e.id));
+    const orphans = session.exercises
+      .filter((log) => !prescribedIds.has(log.exerciseId) && log.sets.length > 0)
+      .map((log) => lookupExercise(log.exerciseId))
+      .filter((e): e is Exercise => e !== undefined);
+
+    return [...prescribed, ...orphans];
   }, [session]);
 
   // Restores the in-progress exercise on refresh: the first one whose target
