@@ -92,7 +92,8 @@ describe('buildWeeklyReview', () => {
       mobilityVariableForWeek: () => null,
     });
     const flDelta = review.skillDeltas.find((d) => d.skill.id === 'frontLever');
-    expect(flDelta?.progressIndex).not.toBeNull();
+    expect(flDelta?.current).not.toBeNull();
+    expect(flDelta?.current?.kind).toBe('seconds');
   });
 
   it('carries next week\'s phase note and mobility variable, and is null for week 12', () => {
@@ -137,7 +138,7 @@ describe('checkEndOfBlockTargets', () => {
       dailyEntries: {},
       benchmarkEntries: {},
       settings: settings(),
-      week12ProgressIndex: () => null,
+      week12RetentionPct: () => null,
       asOfDate: '2026-03-30',
     });
     expect(result[0].items.every((i) => i.status === 'unknown')).toBe(true);
@@ -158,20 +159,20 @@ describe('checkEndOfBlockTargets', () => {
       dailyEntries,
       benchmarkEntries: {},
       settings: settings(),
-      week12ProgressIndex: () => null,
+      week12RetentionPct: () => null,
       asOfDate,
     });
     expect(result[0].items[0].status).toBe('met');
   });
 
-  it('marks dip/pull-up maintenance from week-12 progress indexes', () => {
+  it('marks dip/pull-up maintenance from week-12 retention percentages', () => {
     const result = checkEndOfBlockTargets({
       targetGroups,
       sessionLogs: {},
       dailyEntries: {},
       benchmarkEntries: {},
       settings: settings(),
-      week12ProgressIndex: (id) => (id === 'ring-dip' || id === 'ring-pullup' ? 95 : null),
+      week12RetentionPct: (id: string) => (id === 'ring-dip' || id === 'ring-pullup' ? 95 : null),
       asOfDate: '2026-03-30',
     });
     expect(result[0].items[3].status).toBe('met');

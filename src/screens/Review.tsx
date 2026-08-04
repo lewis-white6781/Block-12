@@ -8,10 +8,9 @@ import { targets } from '../data/targets';
 import { weeklyProgressionVariables } from '../data/mobility';
 import { currentWeek, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
-import { rolling7Weight } from '../domain/body';
 import { fmt } from '../domain/format';
 import { fmtKg, fmtKgSigned } from '../domain/units';
-import { buildExerciseHistory, computeSetScore, exerciseProgressIndex } from '../domain/scoring';
+import { bestBySession, bestOf, formatBest, trendArrow } from '../domain/performance';
 import { buildWeeklyReview, checkEndOfBlockTargets } from '../domain/review';
 import type { TargetStatus } from '../domain/review';
 import BenchmarkForm from '../components/BenchmarkForm';
@@ -38,7 +37,6 @@ export default function Review() {
   const progressionEvents = useStore((s) => s.progressionEvents);
 
   const [selectedWeek, setSelectedWeek] = useState(() => currentWeek(startOfToday(), settings.blockStartDate));
-  const dailyEntriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
 
   const review = useMemo(
     () =>
@@ -55,14 +53,21 @@ export default function Review() {
     [selectedWeek, settings, sessionLogs, dailyEntries, progressionEvents],
   );
 
-  function week12ProgressIndex(exerciseId: string): number | null {
+  /**
+   * Best of the last 3 sessions as a percentage of the weeks 1-2 baseline, in
+   * the movement's own unit. v3.0 replacement for the Exercise Progress Index
+   * (SPEC-V3.0.md section 1): the "broadly maintained" / "no decline" week-12
+   * targets genuinely want a ratio, they just no longer want a difficulty
+   * multiplier inside it.
+   */
+  function week12RetentionPct(exerciseId: string): number | null {
     const exercise = program.find((e) => e.id === exerciseId);
     if (!exercise) return null;
-    const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
-    const history = buildExerciseHistory(sessionLogs, exercise.id, (set, date) =>
-      computeSetScore(exercise, ladder, set, rolling7Weight(dailyEntriesArray, date) ?? settings.startWeightKg),
-    );
-    return exerciseProgressIndex(history);
+    const history = bestBySession(sessionLogs, exercise);
+    const baseline = bestOf(history.filter((h) => h.week <= 2).map((h) => h.best));
+    const current = bestOf(history.slice(-3).map((h) => h.best));
+    if (!baseline || !current || baseline.value === 0) return null;
+    return (current.value / baseline.value) * 100;
   }
 
   const targetChecklist =
@@ -73,7 +78,7 @@ export default function Review() {
           dailyEntries,
           benchmarkEntries,
           settings,
-          week12ProgressIndex,
+          week12RetentionPct,
           asOfDate: todayISO(),
         })
       : null;
@@ -151,20 +156,19 @@ export default function Review() {
       </Card>
 
       <Card className="mt-4">
-        <SectionHeader>Skill Progress Index — this week</SectionHeader>
+        <SectionHeader>Skills — this week</SectionHeader>
         <ul className="mt-2 space-y-1 text-sm">
-          {review.skillDeltas.map(({ skill, progressIndex, deltaVsLastWeek }) => (
-            <li key={skill.id} className="flex items-center justify-between">
+          {review.skillDeltas.map(({ skill, current, previous, trend }) => (
+            <li key={skill.id} className="flex items-center justify-between gap-2">
               <span className="text-text">{skill.label}</span>
               <span className="tabular-nums text-muted">
-                {progressIndex !== null ? progressIndex.toFixed(0) : '—'}
-                {deltaVsLastWeek !== null && (
-                  <span className={deltaVsLastWeek >= 0 ? 'text-good' : 'text-bad'}>
-                    {' '}
-                    ({deltaVsLastWeek >= 0 ? '+' : ''}
-                    {deltaVsLastWeek.toFixed(0)})
-                  </span>
-                )}
+                {previous && current && previous.value !== current.value
+                  ? `${formatBest(previous)} → `
+                  : ''}
+                <span className="text-text">{formatBest(current)}</span>{' '}
+                <span className={trend === 'up' ? 'text-good' : trend === 'down' ? 'text-bad' : 'text-muted'}>
+                  {trendArrow(trend)}
+                </span>
               </span>
             </li>
           ))}

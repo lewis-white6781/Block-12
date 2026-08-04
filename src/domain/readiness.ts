@@ -2,7 +2,8 @@
 // SPEC.md sections 6.9 (gate), 6.10.
 import { program } from '../data/program';
 import { fmt, fmtPct } from './format';
-import { computeSetScore, exerciseSessionBest } from './scoring';
+import { plainScore } from './performance';
+import { exerciseSessionBest } from './scoring';
 import type { DayId, Readiness, SessionLog } from './types';
 
 // ---------------------------------------------------------------------------
@@ -84,7 +85,7 @@ function sprintCondition(sessionLogs: Record<string, SessionLog>): OptionalRunCo
   }
 
   const scoreForSession = (s: SessionLog) =>
-    exerciseSessionBest(s, 'sprints', (set) => computeSetScore(exercise, undefined, set, 0));
+    exerciseSessionBest(s, 'sprints', (set) => plainScore(exercise.metric, set));
 
   const latest = wedSessions[wedSessions.length - 1];
   const latestScore = scoreForSession(latest);

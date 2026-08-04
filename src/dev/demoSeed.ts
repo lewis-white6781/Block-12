@@ -26,7 +26,7 @@ const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 // Deliberately kept flat across weeks 4-6 so the stagnation detector fires on
 // it — it's a SKILLS exercise (HSPU/handstand), so it also shows up as a flat
-// line on the Progress screen's skill headline and difficulty timeline.
+// bar on the Progress screen's skill headline sparkline.
 const STAGNANT_EXERCISE_ID = 'wall-hspu-partial';
 
 // Tiny deterministic PRNG (mulberry32) — reproducible "plausible" noise.
@@ -82,7 +82,7 @@ function baseValueFor(exercise: Exercise): DemoBase {
 }
 
 // Mild step progression through a ladder's variants for the demo's 4 SKILLS
-// exercises, so the difficulty timeline chart shows movement. The stagnant
+// exercises, so the per-variant breakdown has more than one row. The stagnant
 // exercise stays pinned to one variant throughout, reinforcing the plateau.
 function variantIdForWeek(exercise: Exercise, week: number): string | undefined {
   if (!exercise.ladderId) return undefined;

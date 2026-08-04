@@ -1,6 +1,9 @@
-// SPEC.md section 7.3 — "Per-exercise chart (picker): toggle between Best set
-// score, Total volume, Relative est. 1RM, Difficulty level. Phase bands
-// shaded behind the line; deload/taper labelled."
+// Per-exercise chart — SPEC.md section 7.3 as amended by SPEC-V3.0.md section 2.
+//
+// v3.0 dropped the "Difficulty level" and abstract "Best set score" series.
+// "Best set" is now the raw logged number in the movement's own unit, and
+// volume is the plain sum of that number across the week. Phase bands behind
+// the line are unchanged; deload/taper stay labelled.
 import { useMemo, useState } from 'react';
 import {
   CartesianGrid,
@@ -14,32 +17,30 @@ import {
 } from 'recharts';
 import { rolling7Weight } from '../domain/body';
 import { axisFormatter, tooltipFormatter } from './chartFormat';
-import { effectiveLevelForSet } from '../domain/difficulty';
+import { bestKindFor, plainScore } from '../domain/performance';
 import { phaseForWeek } from '../domain/phase';
-import { computeSetScore, est1RMrelative, isQualifyingSet } from '../domain/scoring';
-import type { DailyEntry, Exercise, Ladder, Phase, SessionLog, Settings } from '../domain/types';
+import { est1RMrelative, isQualifyingSet } from '../domain/scoring';
+import type { DailyEntry, Exercise, Phase, SessionLog, Settings } from '../domain/types';
 
-type MetricKey = 'score' | 'volume' | 'relative1rm' | 'difficulty';
+type MetricKey = 'best' | 'volume' | 'relative1rm';
 
-const METRICS: { key: MetricKey; label: string }[] = [
-  { key: 'score', label: 'Best set score' },
-  { key: 'volume', label: 'Total volume' },
-  { key: 'relative1rm', label: 'Relative est. 1RM' },
-  { key: 'difficulty', label: 'Difficulty level' },
-];
+const UNIT_LABEL: Record<ReturnType<typeof bestKindFor>, string> = {
+  reps: 'reps',
+  weightedReps: 'reps',
+  seconds: 's',
+  distance: 'm',
+};
 
 interface WeekPoint {
   week: number;
   phase: Phase;
-  score?: number;
+  best?: number;
   volume?: number;
   relative1rm?: number;
-  difficulty?: number;
 }
 
 interface ProgressChartProps {
   exercise: Exercise;
-  ladder: Ladder | undefined;
   sessionLogs: Record<string, SessionLog>;
   dailyEntries: DailyEntry[];
   settings: Settings;
@@ -58,8 +59,18 @@ function phaseBands(data: WeekPoint[]): { phase: Phase; x1: number; x2: number }
   return bands;
 }
 
-export default function ProgressChart({ exercise, ladder, sessionLogs, dailyEntries, settings }: ProgressChartProps) {
-  const [metric, setMetric] = useState<MetricKey>('score');
+export default function ProgressChart({ exercise, sessionLogs, dailyEntries, settings }: ProgressChartProps) {
+  const [metric, setMetric] = useState<MetricKey>('best');
+
+  const unit = UNIT_LABEL[bestKindFor(exercise.metric)];
+  const metrics: { key: MetricKey; label: string }[] = [
+    { key: 'best', label: `Best set (${unit})` },
+    { key: 'volume', label: `Total volume (${unit})` },
+    // Only meaningful where there is a load to be relative to.
+    ...(exercise.metric === 'weightedReps'
+      ? [{ key: 'relative1rm' as const, label: 'Relative est. 1RM' }]
+      : []),
+  ];
 
   const data = useMemo<WeekPoint[]>(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -76,13 +87,11 @@ export default function ProgressChart({ exercise, ladder, sessionLogs, dailyEntr
 
         for (const set of log.sets) {
           any = true;
-          const score = computeSetScore(exercise, ladder, set, bodyweightKg);
-          totalVolume += score;
+          const value = plainScore(exercise.metric, set);
+          totalVolume += value;
           if (!isQualifyingSet(set)) continue;
 
-          point.score = point.score === undefined ? score : Math.max(point.score, score);
-          const effLevel = effectiveLevelForSet(exercise, ladder, set);
-          point.difficulty = point.difficulty === undefined ? effLevel : Math.max(point.difficulty, effLevel);
+          point.best = point.best === undefined ? value : Math.max(point.best, value);
 
           if (exercise.metric === 'weightedReps' && set.reps !== undefined) {
             const relative = est1RMrelative(bodyweightKg, set.addedKg ?? 0, set.reps);
@@ -93,7 +102,7 @@ export default function ProgressChart({ exercise, ladder, sessionLogs, dailyEntr
       if (any) point.volume = totalVolume;
       return point;
     });
-  }, [exercise, ladder, sessionLogs, dailyEntries, settings.startWeightKg]);
+  }, [exercise, sessionLogs, dailyEntries, settings.startWeightKg]);
 
   const bands = useMemo(() => phaseBands(data), [data]);
   const hasData = data.some((d) => d[metric] !== undefined);
@@ -101,7 +110,7 @@ export default function ProgressChart({ exercise, ladder, sessionLogs, dailyEntr
   return (
     <div>
       <div className="flex gap-1 overflow-x-auto pb-1">
-        {METRICS.map((m) => (
+        {metrics.map((m) => (
           <button
             key={m.key}
             type="button"

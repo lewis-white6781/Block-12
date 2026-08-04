@@ -13,7 +13,9 @@ import type { GuardrailFiring, StagnationResult, StopRuleResult } from './analys
 import { corridorStatus, rolling7Calories, rolling7Carbs, rolling7Fat, rolling7Weight, weeklyRateKg } from './body';
 import type { CorridorStatus } from './body';
 import { dayIdForDate, phaseForWeek } from './phase';
-import { buildExerciseHistory, computeSetScore, exerciseProgressIndex, isQualifyingSet } from './scoring';
+import { bestAsOf, bestBySession, bestOverall, buildPlainHistory, trend } from './performance';
+import type { Best, Trend } from './performance';
+import { isQualifyingSet } from './scoring';
 import type {
   BenchmarkEntry,
   DailyEntry,
@@ -57,10 +59,14 @@ export interface WeeklyReview {
     meanCarbsG: number | null;
     meanFatG: number | null;
   };
+  // v3.0: plain bests in the movement's own unit instead of a unitless index
+  // (SPEC-V3.0.md section 2). `previous` is the best as of the end of the
+  // prior week, so the pair reads "was X, now Y".
   skillDeltas: {
     skill: (typeof SKILLS)[number];
-    progressIndex: number | null;
-    deltaVsLastWeek: number | null;
+    current: Best | null;
+    previous: Best | null;
+    trend: Trend | null;
   }[];
   firedFlags: {
     stagnation: StagnationResult[];
@@ -104,9 +110,6 @@ function weekOfDateFor(blockStartDate: string) {
   };
 }
 
-function bodyweightAt(dailyEntries: DailyEntry[], date: string, startWeightKg: number): number {
-  return rolling7Weight(dailyEntries, date) ?? startWeightKg;
-}
 
 function isAmDayComplete(session: SessionLog | undefined, exercisesForDay: Exercise[]): boolean {
   if (!session) return false;
@@ -164,22 +167,17 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
   const meanCarbsG = rolling7Carbs(dailyEntriesArray, end);
   const meanFatG = rolling7Fat(dailyEntriesArray, end);
 
-  // --- per-skill Progress Index + weekly delta ---
-  const scoreForSet = (exercise: Exercise, ladder: Ladder | undefined) => (set: Parameters<typeof computeSetScore>[2], date: string) =>
-    computeSetScore(exercise, ladder, set, bodyweightAt(dailyEntriesArray, date, settings.startWeightKg));
-
+  // --- per-skill best, and what it was a week ago ---
   const skillDeltas = SKILLS.map((skill) => {
     const exercise = program.find((e) => e.id === skill.exerciseId);
-    if (!exercise) return { skill, progressIndex: null, deltaVsLastWeek: null };
-    const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
-    const history = buildExerciseHistory(sessionLogs, exercise.id, scoreForSet(exercise, ladder));
-    const thisWeek = exerciseProgressIndex(history.filter((r) => r.date <= end));
+    if (!exercise) return { skill, current: null, previous: null, trend: null };
+    const history = bestBySession(sessionLogs, exercise).filter((h) => h.date <= end);
     const priorWeekEnd = format(addDays(parseISO(end), -7), 'yyyy-MM-dd');
-    const lastWeek = exerciseProgressIndex(history.filter((r) => r.date <= priorWeekEnd));
     return {
       skill,
-      progressIndex: thisWeek,
-      deltaVsLastWeek: thisWeek !== null && lastWeek !== null ? thisWeek - lastWeek : null,
+      current: bestOverall(history),
+      previous: bestAsOf(history, priorWeekEnd),
+      trend: trend(history),
     };
   });
 
@@ -189,10 +187,7 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
   const trackedExercises = program.filter((e) => e.tracked);
   const stagnation: StagnationResult[] = [];
   for (const exercise of trackedExercises) {
-    const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
-    const history = buildExerciseHistory(sessionLogs, exercise.id, scoreForSet(exercise, ladder)).filter(
-      (r) => r.date <= end,
-    );
+    const history = buildPlainHistory(sessionLogs, exercise).filter((r) => r.date <= end);
     const result = detectStagnation({
       exercise,
       history,
@@ -224,10 +219,7 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
           const nextPhase = phaseForWeek(nw);
           const suggestions = trackedExercises
             .map((exercise) => {
-              const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
-              const history = buildExerciseHistory(sessionLogs, exercise.id, scoreForSet(exercise, ladder)).filter(
-                (r) => r.date <= end,
-              );
+              const history = buildPlainHistory(sessionLogs, exercise).filter((r) => r.date <= end);
               return detectStagnation({
                 exercise,
                 history,
@@ -318,7 +310,14 @@ export function checkEndOfBlockTargets(input: {
   dailyEntries: Record<string, DailyEntry>;
   benchmarkEntries: Record<string, BenchmarkEntry>;
   settings: Settings;
-  week12ProgressIndex: (exerciseId: string) => number | null;
+  /**
+  * Best across the last few sessions as a percentage of the weeks 1-2
+  * baseline, in the movement's own unit. v3.0 replacement for the Exercise
+  * Progress Index (SPEC-V3.0.md section 1) — the "broadly maintained" and
+  * "no decline" targets below genuinely need a ratio, they just no longer
+  * need a difficulty multiplier baked into it.
+  */
+  week12RetentionPct: (exerciseId: string) => number | null;
   /** Date the "current" weight target is evaluated as-of (caller supplies "today"). */
   asOfDate: string;
 }): TargetCheckGroup[] {
@@ -334,8 +333,8 @@ export function checkEndOfBlockTargets(input: {
     }
     // Body: "dip and pull-up performance broadly maintained"
     if (id === 'body' && index === 3) {
-      const dip = input.week12ProgressIndex('ring-dip');
-      const pullup = input.week12ProgressIndex('ring-pullup');
+      const dip = input.week12RetentionPct('ring-dip');
+      const pullup = input.week12RetentionPct('ring-pullup');
       if (dip === null || pullup === null) return 'unknown';
       return dip >= 90 && pullup >= 90 ? 'met' : 'unmet';
     }
@@ -401,8 +400,8 @@ export function checkEndOfBlockTargets(input: {
     }
     // Cardio: "no decline in pistol or sprint performance"
     if (id === 'cardio' && index === 2) {
-      const pistol = input.week12ProgressIndex('pistol');
-      const sprints = input.week12ProgressIndex('sprints');
+      const pistol = input.week12RetentionPct('pistol');
+      const sprints = input.week12RetentionPct('sprints');
       if (pistol === null || sprints === null) return 'unknown';
       return pistol >= 95 && sprints >= 95 ? 'met' : 'unmet';
     }

@@ -13,7 +13,7 @@ import {
   resolvePrescription,
 } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
-import { rolling7Weight, weeklyRatePct } from '../domain/body';
+import { weeklyRatePct } from '../domain/body';
 import {
   elbowVolumeWarning,
   isElbowWarningDay,
@@ -22,9 +22,8 @@ import {
   shoulderVolumeWarning,
 } from '../domain/readiness';
 import { doNotProgressConditions, weeklyProgressionVariables } from '../data/mobility';
-import { ladders } from '../data/ladders';
 import { detectStagnation } from '../domain/analysis';
-import { buildExerciseHistory, computeSetScore } from '../domain/scoring';
+import { buildPlainHistory } from '../domain/performance';
 import { daysWithLoggedWeight } from '../domain/review';
 import type { Readiness, SessionLog } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
@@ -114,15 +113,10 @@ export default function Today() {
   // most one card shows and it's always something you can act on right now.
   const todaysStagnation = useMemo(() => {
     const dailyEntriesArray = Object.values(dailyEntries);
-    const bodyweightAt = (date: string) => rolling7Weight(dailyEntriesArray, date) ?? settings.startWeightKg;
     for (const exercise of [...mainExercises, ...amExercises]) {
-      const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
-      const history = buildExerciseHistory(sessionLogs, exercise.id, (set, date) =>
-        computeSetScore(exercise, ladder, set, bodyweightAt(date)),
-      );
       const result = detectStagnation({
         exercise,
-        history,
+        history: buildPlainHistory(sessionLogs, exercise),
         health: {
           exerciseId: exercise.id,
           recentReadiness,

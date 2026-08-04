@@ -75,7 +75,7 @@ describe('migrate', () => {
     const sets = result.sessionLogs['2026-01-05:main'].exercises[0].sets;
     expect(sets[0].score).toBe(6); // reps
     expect(sets[1].score).toBe(12); // seconds
-    expect(sets[2].score).toBe(10); // summed attempt seconds
+    expect(sets[2].score).toBe(6); // best attempt, not the sum
   });
 
   it('preserves every other field of a rescored set', () => {

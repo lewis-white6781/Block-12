@@ -8,7 +8,8 @@
 // and a genuine rep PR at an easier variant looked like regression.
 //
 // Variant and assistance are handled by GROUPING instead — see bestByVariant.
-import { isQualifyingSet } from './scoring';
+import { buildExerciseHistory, isQualifyingSet } from './scoring';
+import type { DatedSetScore } from './scoring';
 import type { Exercise, SessionLog, SetLog } from './types';
 
 /** Fractional improvement below which two bests count as the same. SPEC.md 6.6. */
@@ -60,6 +61,37 @@ export function setValue(metric: Exercise['metric'], set: SetLog): number | unde
     case 'weightedReps':
       return set.reps;
   }
+}
+
+/**
+ * A single comparable number for a set, for the machinery that needs one
+ * scalar (the stagnation detector, session load, SetLog.score).
+ *
+ * This is `setValue` with two additions: sprints keep SPEC.md 6.3's
+ * `distance × (intensity%)²` formula, which is a real physical model rather
+ * than a difficulty fudge and so survives v3.0 intact; and a set with no raw
+ * value scores 0 instead of undefined.
+ */
+export function plainScore(metric: Exercise['metric'], set: SetLog): number {
+  if (metric === 'sprint') {
+    const pct = (set.intensityPct ?? 0) / 100;
+    return (set.distanceM ?? 0) * pct * pct;
+  }
+  return setValue(metric, set) ?? 0;
+}
+
+/**
+ * Every logged set for one exercise as a plain-scored history, oldest first —
+ * the shape SPEC.md 6.6's stagnation detector consumes. Replaces the
+ * `buildExerciseHistory(..., computeSetScore(...))` pairing, which needed a
+ * bodyweight lookup threaded through every call site purely to feed a
+ * multiplier that no longer exists.
+ */
+export function buildPlainHistory(
+  sessionLogs: Record<string, SessionLog>,
+  exercise: Exercise,
+): DatedSetScore[] {
+  return buildExerciseHistory(sessionLogs, exercise.id, (set) => plainScore(exercise.metric, set));
 }
 
 /**

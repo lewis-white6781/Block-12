@@ -4,12 +4,12 @@ import { program } from '../../data/program';
 import { ladders } from '../../data/ladders';
 import { weeklyProgressionVariables } from '../../data/mobility';
 import { corridorStatus, rolling7Weight, weeklyRateKg } from '../../domain/body';
-import { buildExerciseHistory, computeSetScore, exerciseProgressIndex } from '../../domain/scoring';
+import { bestBySession, bestOverall, trend } from '../../domain/performance';
 import { buildWeeklyReview } from '../../domain/review';
 
 // Sanity check for SPEC.md prompt pack 11.2 Prompt 8: confirms the demo
 // dataset actually exercises the stagnation detector, corridor status, and
-// Progress Index — not just that it renders without crashing.
+// the plain performance model — not just that it renders without crashing.
 describe('generateDemoState', () => {
   const state = generateDemoState();
 
@@ -49,28 +49,21 @@ describe('generateDemoState', () => {
     expect(corridorStatus(rate)).not.toBeNull();
   });
 
-  it('shows a rising Progress Index for a non-stagnant skill exercise', () => {
+  it('shows an improving best for a non-stagnant skill exercise', () => {
     const exercise = program.find((e) => e.id === 'fl-hard-iso')!;
-    const ladder = ladders.find((l) => l.id === exercise.ladderId);
-    const dailyEntriesArray = Object.values(state.dailyEntries);
-    const history = buildExerciseHistory(state.sessionLogs, exercise.id, (set, date) =>
-      computeSetScore(exercise, ladder, set, rolling7Weight(dailyEntriesArray, date) ?? state.settings.startWeightKg),
-    );
-    const index = exerciseProgressIndex(history);
-    expect(index).not.toBeNull();
-    expect(index as number).toBeGreaterThan(100);
+    const history = bestBySession(state.sessionLogs, exercise);
+    expect(history.length).toBeGreaterThan(3);
+    expect(trend(history)).toBe('up');
+
+    const first = history[0].best.value;
+    const last = bestOverall(history)!.value;
+    expect(last).toBeGreaterThan(first);
   });
 
   it('keeps the stagnant exercise flat rather than improving', () => {
     const exercise = program.find((e) => e.id === 'wall-hspu-partial')!;
-    const ladder = ladders.find((l) => l.id === exercise.ladderId);
-    const dailyEntriesArray = Object.values(state.dailyEntries);
-    const history = buildExerciseHistory(state.sessionLogs, exercise.id, (set, date) =>
-      computeSetScore(exercise, ladder, set, rolling7Weight(dailyEntriesArray, date) ?? state.settings.startWeightKg),
-    );
-    const index = exerciseProgressIndex(history);
-    expect(index).not.toBeNull();
-    // Flat by design: within a few % of baseline, not trending up like the other skills.
-    expect(index as number).toBeLessThan(108);
+    const history = bestBySession(state.sessionLogs, exercise);
+    expect(history.length).toBeGreaterThan(3);
+    expect(trend(history)).not.toBe('up');
   });
 });

@@ -1,58 +1,25 @@
-// Set score, session load, relative strength, Exercise Progress Index — SPEC.md sections 6.3–6.5.
-import { effectiveLevelForSet } from './difficulty';
-import type { Exercise, Ladder, SessionLog, SetLog } from './types';
-
-/** SetLog.score must exist the moment a set is logged, then gets recomputed on
- * read with the real engine once bodyweight-at-date etc. are known. */
-export function placeholderSetScore(set: Pick<SetLog, 'reps' | 'seconds' | 'attempts'>): number {
-  if (set.attempts) return set.attempts.reduce((sum, seconds) => sum + seconds, 0);
-  return set.reps ?? set.seconds ?? 0;
-}
-
-/** intensityFactor(effLevel) = 1 + 0.2 × effLevel */
-export function intensityFactor(effLevel: number): number {
-  return 1 + 0.2 * effLevel;
-}
+// Session load, relative strength, qualifying-set rule — SPEC.md section 6.3,
+// as amended by SPEC-V3.0.md section 2.
+//
+// The Difficulty Index (effectiveLevel), the intensity multiplier
+// (1 + 0.2 × effLevel) and the Exercise Progress Index (current/baseline × 100)
+// were deleted in v3.0. Variant difficulty is now a GROUPING key, not a
+// coefficient — see src/domain/performance.ts. What remains here is the part
+// that was never the problem: bodyweight-relative load, the qualifying-set
+// rule, and the history/rolling-best plumbing.
+import type { Exercise, SessionLog, SetLog } from './types';
 
 /**
- * Recomputes a set's score per SPEC.md 6.3. `bodyweightKg` should be the 7-day
- * rolling average as of the session date, falling back to settings.startWeightKg.
+ * The plain comparable value written to SetLog.score at log time.
  *
- * `timeOnly` scores like `hold` (SPEC-V1.1.md section 2.3 / prompt 6) — AM
- * holds are now tracked and need a real score for Progress Index and
- * stagnation to see them. `distanceTime` (easy runs) still has no scoring
- * formula in the spec and stays completion-only.
+ * `attempts` reports the BEST attempt, matching performance.ts's setValue.
+ * It used to sum them, which rewarded taking more attempts rather than being
+ * better at it, and left the CSV's score column disagreeing with the best
+ * shown on screen for the same set.
  */
-export function computeSetScore(
-  exercise: Exercise,
-  ladder: Ladder | undefined,
-  set: SetLog,
-  bodyweightKg: number,
-): number {
-  const factor = intensityFactor(effectiveLevelForSet(exercise, ladder, set));
-  switch (exercise.metric) {
-    case 'hold':
-    case 'timeOnly':
-      return (set.seconds ?? 0) * factor;
-    case 'reps':
-      return (set.reps ?? 0) * factor;
-    case 'attempts':
-      return (set.attempts ?? []).reduce((sum, s) => sum + s, 0) * factor;
-    case 'weightedReps': {
-      if (!bodyweightKg) return 0;
-      return (set.reps ?? 0) * ((bodyweightKg + (set.addedKg ?? 0)) / bodyweightKg) * factor;
-    }
-    case 'sprint': {
-      // Per-set decomposition of "totalMetres × (avgIntensityPct/100)²": one set
-      // is one rep, so this formula applied per rep and summed across the
-      // session's sets reduces to the spec's exercise-level total when intensity
-      // is constant across reps, and degrades gracefully otherwise.
-      const pct = (set.intensityPct ?? 0) / 100;
-      return (set.distanceM ?? 0) * pct * pct;
-    }
-    case 'distanceTime':
-      return 0;
-  }
+export function placeholderSetScore(set: Pick<SetLog, 'reps' | 'seconds' | 'attempts'>): number {
+  if (set.attempts?.length) return Math.max(...set.attempts);
+  return set.reps ?? set.seconds ?? 0;
 }
 
 /** For weightedReps exercises: bodyweight-normalised relative load and est. 1RM. */
@@ -141,30 +108,6 @@ export function buildExerciseHistory(
 export function bestQualifyingScore(rows: DatedSetScore[]): number | null {
   const qualifying = rows.filter((r) => r.qualifies);
   return qualifying.length ? Math.max(...qualifying.map((r) => r.score)) : null;
-}
-
-function lastNSessionDates(history: DatedSetScore[], n: number): Set<string> {
-  const dates = Array.from(new Set(history.map((r) => r.date))).sort();
-  return new Set(dates.slice(-n));
-}
-
-/** baseline = best qualifying set score across weeks 1–2. */
-export function exerciseBaseline(history: DatedSetScore[]): number | null {
-  return bestQualifyingScore(history.filter((r) => r.week <= 2));
-}
-
-/** current = best qualifying set score across the last n (default 3) sessions of this exercise. */
-export function exerciseCurrent(history: DatedSetScore[], n = 3): number | null {
-  const dates = lastNSessionDates(history, n);
-  return bestQualifyingScore(history.filter((r) => dates.has(r.date)));
-}
-
-/** progressIndex = current / baseline × 100 (week 1–2 = 100). Null if not enough data. */
-export function exerciseProgressIndex(history: DatedSetScore[]): number | null {
-  const baseline = exerciseBaseline(history);
-  const current = exerciseCurrent(history);
-  if (baseline === null || current === null || baseline === 0) return null;
-  return (current / baseline) * 100;
 }
 
 /** The raw reps/seconds value SPEC.md 6.6's "≥15% below rolling best" compares against. */

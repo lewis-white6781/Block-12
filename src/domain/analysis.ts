@@ -219,7 +219,7 @@ function relevantJoint(exerciseId: string): 'elbow' | 'shoulder' | null {
   return null;
 }
 
-/** flat = progressIndex's best-of-last-3 has not beaten the prior best by >=3%. */
+/** flat = the best of the last 3 sessions has not beaten the prior best by >=3%. */
 export function isFlat(history: DatedSetScore[]): boolean {
   const dates = Array.from(new Set(history.map((r) => r.date))).sort();
   if (dates.length < 4) return false;

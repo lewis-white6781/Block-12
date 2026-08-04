@@ -1,7 +1,7 @@
 // SPEC.md section 7.3.
 import { useMemo, useState } from 'react';
 import { addDays, format, parseISO } from 'date-fns';
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore } from '../store/useStore';
 import { dayTitles, program } from '../data/program';
 import { exerciseName } from '../data/exercises';
@@ -9,29 +9,24 @@ import { ladders } from '../data/ladders';
 import { currentWeek, dayIdForDate, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
 import { SKILLS } from '../domain/analysis';
-import { rolling7Weight } from '../domain/body';
-import { effectiveLevelForSet } from '../domain/difficulty';
 import {
-  buildExerciseHistory,
-  computeSetScore,
-  exerciseProgressIndex,
-  exerciseRollingBestRaw,
-  isQualifyingSet,
-} from '../domain/scoring';
-import type { DayId, Exercise, Ladder, SessionLog } from '../domain/types';
+  bestAsOf,
+  bestByVariant,
+  bestBySession,
+  bestByWeek,
+  bestOverall,
+  formatBest,
+  trend,
+  trendArrow,
+} from '../domain/performance';
+import type { Best } from '../domain/performance';
+import type { DayId, Exercise, SessionLog } from '../domain/types';
 import ProgressChart from '../components/ProgressChart';
-import { axisFormatter, tooltipFormatter } from '../components/chartFormat';
+import { tooltipFormatter } from '../components/chartFormat';
 import Sheet from '../components/Sheet';
 import PhaseBadge from '../components/PhaseBadge';
 import Card from '../components/Card';
 import SectionHeader from '../components/SectionHeader';
-
-const SKILL_COLOR: Record<string, string> = {
-  frontLever: 'var(--good)',
-  hspu: 'var(--taper)',
-  pistol: 'var(--intensification)',
-  pullup: 'var(--peak)',
-};
 
 const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -139,22 +134,26 @@ function ExercisePickerSheet({
   );
 }
 
-function ladderFor(exercise: Exercise | undefined): Ladder | undefined {
-  return exercise?.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
-}
+function Sparkline({ weeks }: { weeks: (Best | null)[] }) {
+  const values = weeks.map((b) => b?.value ?? null);
+  const max = Math.max(...values.filter((v): v is number => v !== null), 0);
+  if (max === 0) return <p className="mt-2 text-xs text-muted">No qualifying sets yet.</p>;
 
-function mostRecentQualifyingSet(sessionLogs: Record<string, SessionLog>, exerciseId: string) {
-  const sessions = Object.values(sessionLogs)
-    .filter((s) => s.exercises.some((e) => e.exerciseId === exerciseId))
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-  for (const session of sessions) {
-    const log = session.exercises.find((e) => e.exerciseId === exerciseId);
-    if (!log) continue;
-    for (let i = log.sets.length - 1; i >= 0; i--) {
-      if (isQualifyingSet(log.sets[i])) return log.sets[i];
-    }
-  }
-  return undefined;
+  return (
+    <div className="mt-2 flex h-8 items-end gap-1" aria-hidden>
+      {values.map((v, i) => (
+        <div
+          key={i}
+          title={v !== null ? `Week ${i + 1}: ${formatBest(weeks[i])}` : `Week ${i + 1}: no data`}
+          className="flex-1 rounded-sm"
+          style={{
+            height: v !== null ? `${Math.max(8, (v / max) * 100)}%` : '2px',
+            backgroundColor: v !== null ? 'var(--good)' : 'var(--line)',
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
 function amDayComplete(session: SessionLog | undefined, exercisesForDay: Exercise[]): boolean {
@@ -182,60 +181,42 @@ export default function Progress() {
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const selectedExercise = trackedExercises.find((e) => e.id === selectedExerciseId) ?? trackedExercises[0];
-  const selectedLadder = ladderFor(selectedExercise);
-
-  function bodyweightAt(date: string): number {
-    return rolling7Weight(dailyEntriesArray, date) ?? settings.startWeightKg;
-  }
 
   // --- Skill headlines ---
+  // v3.0 (SPEC-V3.0.md section 2): the plain best in the movement's own unit,
+  // a trend arrow, and the same figure four weeks ago. No index, no
+  // unitless score. `variants` shows the best per variant/assistance group so
+  // a rep PR at an easier variant is never read as beating a harder one.
   const skillHeadlines = useMemo(
     () =>
       SKILLS.map((skill) => {
         const exercise = program.find((e) => e.id === skill.exerciseId);
         if (!exercise) return null;
-        const ladder = ladderFor(exercise);
-        const history = buildExerciseHistory(sessionLogs, exercise.id, (set, date) =>
-          computeSetScore(exercise, ladder, set, bodyweightAt(date)),
-        );
-        const progressIndex = exerciseProgressIndex(history);
+        const history = bestBySession(sessionLogs, exercise);
         const fourWeeksAgo = format(addDays(startOfToday(), -28), 'yyyy-MM-dd');
-        const progressIndex4wAgo = exerciseProgressIndex(history.filter((r) => r.date <= fourWeeksAgo));
-        const delta = progressIndex !== null && progressIndex4wAgo !== null ? progressIndex - progressIndex4wAgo : null;
-        const bestRaw = exerciseRollingBestRaw(sessionLogs, exercise.id, exercise.metric, '', 999);
-        const lastSet = mostRecentQualifyingSet(sessionLogs, exercise.id);
-        const variantLabel = ladder && lastSet?.variantId ? ladder.variants.find((v) => v.id === lastSet.variantId)?.label : undefined;
-        return { skill, exercise, progressIndex, delta, bestRaw, variantLabel };
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionLogs, dailyEntriesArray, settings.startWeightKg],
-  );
+        const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
+        const variantLabel = (best: Best | null) =>
+          ladder && best?.variantId ? ladder.variants.find((v) => v.id === best.variantId)?.label : undefined;
 
-  // --- Difficulty timeline: effective level per skill, per week ---
-  const difficultyTimeline = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => {
-      const w = i + 1;
-      const point: Record<string, number | undefined> & { week: number } = { week: w };
-      for (const skill of SKILLS) {
-        const exercise = program.find((e) => e.id === skill.exerciseId);
-        if (!exercise) continue;
-        const ladder = ladderFor(exercise);
-        let best: number | undefined;
-        for (const session of Object.values(sessionLogs)) {
-          if (session.week !== w) continue;
-          const log = session.exercises.find((e) => e.exerciseId === exercise.id);
-          if (!log) continue;
-          for (const set of log.sets) {
-            if (!isQualifyingSet(set)) continue;
-            const level = effectiveLevelForSet(exercise, ladder, set);
-            best = best === undefined ? level : Math.max(best, level);
-          }
-        }
-        point[skill.id] = best;
-      }
-      return point;
-    });
-  }, [sessionLogs]);
+        const current = bestOverall(history);
+        return {
+          skill,
+          exercise,
+          current,
+          then: bestAsOf(history, fourWeeksAgo),
+          trend: trend(history),
+          variantLabel: variantLabel(current),
+          weekly: bestByWeek(history),
+          variants: Array.from(bestByVariant(history).entries()).map(([key, best]) => ({
+            key,
+            label: variantLabel(best) ?? 'no variant',
+            tier: best.assistanceTier ?? 0,
+            best,
+          })),
+        };
+      }),
+    [sessionLogs],
+  );
 
   // --- Consistency heatmap ---
   const heatmap = useMemo(() => {
@@ -300,27 +281,46 @@ export default function Progress() {
       <div className="flex-1 overflow-y-auto p-4">
       <h1 className="font-display text-2xl text-text">Progress</h1>
 
-      <section className="mt-4 grid grid-cols-2 gap-2">
+      <section className="mt-4 grid grid-cols-1 gap-2">
         {skillHeadlines.map((h) => {
           if (!h) return null;
-          const unit = h.exercise.metric === 'hold' || h.exercise.metric === 'attempts' ? 's' : '';
           return (
             <Card key={h.skill.id}>
-              <div className="text-xs uppercase tracking-wide text-muted">{h.skill.label}</div>
-              <div className="mt-1 text-xs text-muted">{h.variantLabel ?? '—'}</div>
-              <div className="mt-1 font-display text-2xl tabular-nums text-text">
-                {h.bestRaw !== null ? `${h.bestRaw}${unit}` : '—'}
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs uppercase tracking-wide text-muted">{h.skill.label}</span>
+                <span className="text-xs text-muted">{h.variantLabel ?? '—'}</span>
               </div>
-              <div className="mt-1 text-xs tabular-nums text-muted">
-                Index {h.progressIndex !== null ? h.progressIndex.toFixed(0) : '—'}
-                {h.delta !== null && (
-                  <span className={h.delta >= 0 ? 'text-good' : 'text-bad'}>
-                    {' '}
-                    ({h.delta >= 0 ? '+' : ''}
-                    {h.delta.toFixed(0)} vs 4wk ago)
-                  </span>
-                )}
+
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="font-display text-2xl tabular-nums text-text">{formatBest(h.current)}</span>
+                <span
+                  className={
+                    h.trend === 'up' ? 'text-good' : h.trend === 'down' ? 'text-bad' : 'text-muted'
+                  }
+                >
+                  {trendArrow(h.trend)}
+                </span>
               </div>
+
+              <div className="mt-1 text-xs text-muted">
+                {h.then ? `was ${formatBest(h.then)} four weeks ago` : 'no comparison yet'}
+              </div>
+
+              <Sparkline weeks={h.weekly} />
+
+              {h.variants.length > 1 && (
+                <ul className="mt-2 space-y-0.5 border-t border-line pt-2 text-xs text-muted">
+                  {h.variants.map((v) => (
+                    <li key={v.key} className="flex justify-between gap-2">
+                      <span>
+                        {v.label}
+                        {v.tier > 0 ? ` · tier ${v.tier}` : ''}
+                      </span>
+                      <span className="tabular-nums text-text">{formatBest(v.best)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Card>
           );
         })}
@@ -352,7 +352,6 @@ export default function Progress() {
           <div className="mt-3">
             <ProgressChart
               exercise={selectedExercise}
-              ladder={selectedLadder}
               sessionLogs={sessionLogs}
               dailyEntries={dailyEntriesArray}
               settings={settings}
@@ -362,57 +361,8 @@ export default function Progress() {
       </Card>
 
       <Card className="mt-4">
-        <SectionHeader>Difficulty timeline</SectionHeader>
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={difficultyTimeline} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="var(--line)" vertical={false} />
-            <XAxis
-              dataKey="week"
-              type="number"
-              domain={[1, 12]}
-              ticks={[1, 3, 5, 7, 9, 11]}
-              tick={{ fill: 'var(--muted)', fontSize: 10 }}
-              axisLine={{ stroke: 'var(--line)' }}
-              tickLine={false}
-            />
-            <YAxis
-              tickFormatter={axisFormatter(1)}
-              tick={{ fill: 'var(--muted)', fontSize: 10 }}
-              axisLine={{ stroke: 'var(--line)' }}
-              tickLine={false}
-              width={24}
-            />
-            <Tooltip
-              contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
-              labelFormatter={(w) => `Week ${w}`}
-              formatter={tooltipFormatter(2)}
-            />
-            {SKILLS.map((skill) => (
-              <Line
-                key={skill.id}
-                dataKey={skill.id}
-                name={skill.label}
-                type="stepAfter"
-                stroke={SKILL_COLOR[skill.id]}
-                strokeWidth={2}
-                dot={{ r: 2, strokeWidth: 0 }}
-                connectNulls
-                isAnimationActive={false}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
-          {SKILLS.map((skill) => (
-            <span key={skill.id} className="flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: SKILL_COLOR[skill.id] }} />
-              {skill.label}
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-3 border-t border-line pt-2">
-          <span className="text-xs uppercase tracking-wide text-muted">Progression events</span>
+        <SectionHeader>Progression events</SectionHeader>
+        <div className="mt-1">
           {progressionEvents.length === 0 ? (
             <p className="mt-1 text-xs text-muted">No progression events logged yet.</p>
           ) : (

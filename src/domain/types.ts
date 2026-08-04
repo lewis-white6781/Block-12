@@ -54,7 +54,8 @@ export interface Variant {
   id: string;
   label: string;
   level: number;
-} // level = difficulty index
+} // level = position on the ladder, ascending. v3.0: a grouping key and an
+// ordering, never a coefficient — see src/domain/performance.ts.
 export interface Ladder {
   id: string;
   variants: Variant[];
