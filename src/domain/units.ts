@@ -2,6 +2,8 @@
 // the domain and every stored/exported value stay kg-native regardless of
 // this setting. Never import this into scoring.ts, body.ts, or anything
 // that reads or writes persisted state.
+import { fmt, fmtSigned } from './format';
+
 export type WeightUnit = 'kg' | 'lbs';
 
 const KG_PER_LB = 0.45359237;
@@ -24,7 +26,21 @@ export function parseWeight(input: number, unit: WeightUnit): number {
   return unit === 'lbs' ? lbsToKg(input) : input;
 }
 
-/** Formats a stored kg value for display, e.g. "74.8 kg" or "165.0 lbs". */
+/**
+ * Formats a stored kg value for display, e.g. "74.8 kg" or "165.0 lbs".
+ * Rounding goes through format.ts, so this can never exceed 2 dp
+ * (SPEC-V3.0.md section 7).
+ */
 export function formatWeight(kg: number, unit: WeightUnit, decimals = 1): string {
-  return `${convertWeight(kg, unit).toFixed(decimals)} ${unit}`;
+  return `${fmt(convertWeight(kg, unit), decimals)} ${unit}`;
+}
+
+/** Bare converted+rounded weight with no unit suffix, for tight table cells. */
+export function fmtKg(kg: number, unit: WeightUnit, decimals = 1): string {
+  return fmt(convertWeight(kg, unit), decimals);
+}
+
+/** A signed weight delta in the display unit, e.g. "−0.42" — no unit suffix. */
+export function fmtKgSigned(kg: number, unit: WeightUnit, decimals = 2): string {
+  return fmtSigned(convertWeight(kg, unit), decimals);
 }
