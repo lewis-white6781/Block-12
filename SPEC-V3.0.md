@@ -87,9 +87,9 @@ interface Best {
 }
 ```
 
-- `setValue(exercise, set)` — the raw logged number for that metric. No multipliers, no factors.
-- `compareSets(a, b)` — orders by primary value, tie-broken by higher `addedKg`, then by **lower** `romCm` (deeper is better).
-- `bestSet(sets)` / `sessionBest(session, exerciseId)` — reuse the existing `isQualifyingSet` (any technique flag, RPE 10, or no raw value at all disqualifies). That rule is unchanged and keeps its `SPEC-V1.1.md` §2.4 behaviour of excluding v1.0's bare AM completion markers.
+- `setValue(metric, set)` — the raw logged number for that metric. No multipliers, no factors. For `attempts` it is the **best single attempt**, not the sum: summing rewards taking more attempts, which is not the same as being better at it.
+- `compareBests(a, b)` — for **weighted** movements load leads and reps break the tie, so 1 rep at +25 kg beats 8 reps at +20 kg, which is how a weighted movement actually progresses. For everything else the raw value leads. `romCm` breaks a final tie and is the one comparison that **inverts** — lower pad height is deeper is better.
+- `bestOf(bests)` / `bestBySession(sessionLogs, exercise)` — reuse the existing `isQualifyingSet` (any technique flag, RPE 10, or no raw value at all disqualifies). That rule is unchanged and keeps its `SPEC-V1.1.md` §2.4 behaviour of excluding v1.0's bare AM completion markers. A session where the exercise was logged but nothing qualified is **omitted** from the history rather than recorded as zero — a session of flagged sets is missing data, not a bad result.
 - `bestByVariant(history)` → keyed by `` `${variantId}:${assistanceTier}` ``. **This is how variant difficulty is now handled.** A set at "light band" is never numerically compared against a set at "none"; they are separate rows. Moving between them is already recorded as a `ProgressionEvent`, which is the honest place for that information.
 - `trend(history)` → `'up' | 'flat' | 'down'`: best of the last 2 sessions vs best of the 3 before it, with a ±3 % dead band. The 1.03 threshold is the same constant `SPEC.md` §6.6's stagnation rule uses, and both now read it from one place.
 - `formatBest(best)` → `"8 reps"`, `"12 s"`, `"6 reps @ +10 kg"`, `"6 reps · 15 cm"`.
