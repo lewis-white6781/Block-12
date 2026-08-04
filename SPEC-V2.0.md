@@ -242,11 +242,16 @@ is not done until every line here passes, and every test from `SPEC.md`
     sync being present.
 59. The app functions fully offline (read + write) with sync silently
     deferred, per the original offline-first promise in `SPEC.md` §2.
-60. "Reset block — start over today" (Settings' danger zone, per v2.1)
-    clears local data, restarts the block from this week's Monday, and
-    pushes that empty state to the cloud immediately via an explicit
-    `runSync()` call — the next background sync does not resurrect the
-    deleted block from a stale cloud copy.
+60. **SUPERSEDED by `SPEC-V3.0.md` §1 — this test asserted a behaviour the
+    code never had.** It read: *"Reset block — start over today" (Settings'
+    danger zone, per v2.1) clears local data, restarts the block from this
+    week's Monday, and pushes that empty state to the cloud immediately via
+    an explicit `runSync()` call — the next background sync does not
+    resurrect the deleted block from a stale cloud copy.* The explicit
+    `runSync()` is real, but `mergeByKeyLWW` unions keys and had no
+    tombstone mechanism, so a second device's stale copy re-added every
+    deleted record on its next pull. Fixed in v3.0 via `settings.resetAt`;
+    replaced by acceptance test 74.
 
 ---
 

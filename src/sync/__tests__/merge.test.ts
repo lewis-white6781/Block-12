@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mergeState } from '../merge';
 import { defaultPersistedState, defaultSettings } from '../../store/persist';
 import type { PersistedState, PersistedState as PS } from '../../store/persist';
+import type { SessionLog } from '../../domain/types';
 
 function state(overrides: Partial<PS> = {}): PersistedState {
   return { ...defaultPersistedState(), ...overrides };
@@ -163,5 +164,113 @@ describe('mergeState', () => {
 
     const merged = mergeState(local, remote);
     expect(merged.dailyEntries['2026-01-05'].weightKg).toBe(80); // local wins on tie
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reset tombstones — SPEC-V3.0.md section 6, acceptance test 74.
+//
+// These cover the defect SPEC-V2.0.md test 60 wrongly claimed was absent: the
+// merge unions keys, so before v3.0 every session deleted by "Reset block"
+// came straight back on the next pull.
+// ---------------------------------------------------------------------------
+
+function session(id: string, updatedAt: string): SessionLog {
+  return {
+    id,
+    date: id.slice(0, 10),
+    week: 1,
+    phase: 'calibration',
+    day: 'mon',
+    block: 'main',
+    startedAt: updatedAt,
+    updatedAt,
+    exercises: [],
+  };
+}
+
+const BEFORE = '2026-02-01T09:00:00.000Z';
+const RESET = '2026-02-01T12:00:00.000Z';
+const AFTER = '2026-02-01T15:00:00.000Z';
+
+describe('reset tombstones', () => {
+  /** Device A: freshly reset, so its settings are newest and carry resetAt. */
+  function localAfterReset(): PersistedState {
+    return state({
+      settings: { ...defaultSettings(), updatedAt: RESET, resetAt: RESET },
+      sessionLogs: {},
+    });
+  }
+
+  /** Device B: still holding the pre-reset block. */
+  function staleRemote(): PersistedState {
+    return state({
+      settings: { ...defaultSettings(), updatedAt: BEFORE },
+      sessionLogs: { '2026-01-05:main': session('2026-01-05:main', BEFORE) },
+      dailyEntries: {
+        '2026-01-05': { date: '2026-01-05', weightKg: 80, updatedAt: BEFORE },
+      },
+      progressionEvents: [
+        { id: 'p1', date: '2026-01-05', exerciseId: 'pike-hspu', axis: 'greater ROM', from: 'a', to: 'b' },
+      ],
+    });
+  }
+
+  it('does not resurrect sessions deleted by a reset', () => {
+    expect(mergeState(localAfterReset(), staleRemote()).sessionLogs).toEqual({});
+  });
+
+  it('does not resurrect daily entries or progression events deleted by a reset', () => {
+    const merged = mergeState(localAfterReset(), staleRemote());
+    expect(merged.dailyEntries).toEqual({});
+    expect(merged.progressionEvents).toEqual([]);
+  });
+
+  it('honours the reset from whichever side won the settings merge', () => {
+    // Reversed: the RESET state arrives as `remote`, the stale block is local.
+    const merged = mergeState(staleRemote(), localAfterReset());
+    expect(merged.settings.resetAt).toBe(RESET);
+  });
+
+  it('keeps remote records written AFTER the reset', () => {
+    const remote = state({
+      settings: { ...defaultSettings(), updatedAt: BEFORE },
+      sessionLogs: {
+        '2026-01-05:main': session('2026-01-05:main', BEFORE), // deleted by the reset
+        '2026-02-02:main': session('2026-02-02:main', AFTER), // logged on the other device since
+      },
+    });
+    const merged = mergeState(localAfterReset(), remote);
+    expect(Object.keys(merged.sessionLogs)).toEqual(['2026-02-02:main']);
+  });
+
+  it('never drops a LOCAL record, even one older than the reset', () => {
+    // Losing data sitting on the device in front of the athlete is never
+    // acceptable; the cutoff only ever filters the remote side.
+    const local = state({
+      settings: { ...defaultSettings(), updatedAt: RESET, resetAt: RESET },
+      sessionLogs: { '2026-01-05:main': session('2026-01-05:main', BEFORE) },
+    });
+    const merged = mergeState(local, state({ settings: { ...defaultSettings(), updatedAt: BEFORE } }));
+    expect(Object.keys(merged.sessionLogs)).toEqual(['2026-01-05:main']);
+  });
+
+  it('behaves exactly as before when no reset has ever happened', () => {
+    const local = state({ settings: { ...defaultSettings(), updatedAt: BEFORE } });
+    const merged = mergeState(local, staleRemote());
+    expect(Object.keys(merged.sessionLogs)).toEqual(['2026-01-05:main']);
+    expect(merged.progressionEvents).toHaveLength(1);
+  });
+
+  it('keeps a progression event dated on the reset day itself', () => {
+    // date is a day, not an instant, so same-day events survive — resurrecting
+    // one costs a stale list row, dropping one loses a decision permanently.
+    const remote = state({
+      settings: { ...defaultSettings(), updatedAt: BEFORE },
+      progressionEvents: [
+        { id: 'p2', date: '2026-02-01', exerciseId: 'pike-hspu', axis: 'greater ROM', from: 'a', to: 'b' },
+      ],
+    });
+    expect(mergeState(localAfterReset(), remote).progressionEvents).toHaveLength(1);
   });
 });
