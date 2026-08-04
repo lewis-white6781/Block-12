@@ -10,6 +10,27 @@ import { useSyncStore } from './syncStore';
 
 const TABLE = 'block_state';
 
+/**
+ * Extracts a human-readable message from whatever runSync's try block threw.
+ *
+ * supabase-js throws a PostgrestError — a plain object with `message`,
+ * `details`, `hint` and `code` fields — not a JS `Error`. `err instanceof
+ * Error` is therefore false for the exact errors this function most needs to
+ * surface (missing table, RLS denial, bad column), and the UI fell through to
+ * a generic "Sync failed." with no way to diagnose it from the device.
+ */
+export function syncErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const message = (err as { message: unknown }).message;
+    if (typeof message === 'string' && message.length > 0) {
+      const code = 'code' in err ? (err as { code: unknown }).code : undefined;
+      return typeof code === 'string' && code.length > 0 ? `${message} (${code})` : message;
+    }
+  }
+  return 'Sync failed.';
+}
+
 interface BlockStateRow {
   user_id: string;
   schema_version: number;
@@ -134,8 +155,7 @@ export async function runSync(): Promise<void> {
     if (isOffline) {
       useSyncStore.getState().setOffline();
     } else {
-      const message = err instanceof Error ? err.message : 'Sync failed.';
-      useSyncStore.getState().setError(message);
+      useSyncStore.getState().setError(syncErrorMessage(err));
     }
   } finally {
     syncInFlight = false;
