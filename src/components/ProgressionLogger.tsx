@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { nextProgressionAxis, oneVariableWarning } from '../domain/analysis';
 import { newId } from '../domain/id';
 import type { Exercise, ProgressionEvent } from '../domain/types';
+import Card from './Card';
+import SectionHeader from './SectionHeader';
 
 interface ProgressionLoggerProps {
   exercise: Exercise;
@@ -75,8 +77,8 @@ export default function ProgressionLogger({
   }
 
   return (
-    <div className="mt-3 rounded border border-line bg-surface p-3">
-      <div className="text-xs uppercase tracking-wide text-muted">Progression</div>
+    <Card className="mt-3">
+      <SectionHeader>Progression</SectionHeader>
       <label className="mt-2 block text-sm">
         <span className="text-xs text-muted">Axis</span>
         <select
@@ -146,6 +148,6 @@ export default function ProgressionLogger({
           </button>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

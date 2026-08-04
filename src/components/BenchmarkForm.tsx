@@ -5,6 +5,8 @@ import { useStore } from '../store/useStore';
 import { benchmarks } from '../data/mobility';
 import { todayISO } from '../domain/clock';
 import NumberPad from './NumberPad';
+import Card from './Card';
+import SectionHeader from './SectionHeader';
 
 interface BenchmarkFormProps {
   week: number;
@@ -31,9 +33,9 @@ export default function BenchmarkForm({ week }: BenchmarkFormProps) {
   }
 
   return (
-    <div className="rounded border border-line bg-surface p-3">
+    <Card>
       <div className="flex items-baseline justify-between">
-        <span className="text-sm text-text">Mobility benchmarks · week {week}</span>
+        <SectionHeader>Mobility benchmarks · week {week}</SectionHeader>
         {(existing || saved) && <span className="text-xs text-good">Saved ✓</span>}
       </div>
 
@@ -91,6 +93,6 @@ export default function BenchmarkForm({ week }: BenchmarkFormProps) {
           onClose={() => setPadField(null)}
         />
       ))}
-    </div>
+    </Card>
   );
 }

@@ -32,6 +32,9 @@ import ReadinessCheckIn from '../components/ReadinessCheckIn';
 import ExerciseCard from '../components/ExerciseCard';
 import DailyEntryFields from '../components/DailyEntryFields';
 import BenchmarkForm from '../components/BenchmarkForm';
+import Card from '../components/Card';
+import SectionHeader from '../components/SectionHeader';
+import PagerNav from '../components/PagerNav';
 
 /** Main-session readiness check-ins as of a date, most-recent-first (SPEC.md 6.9, 6.10). */
 function recentMainReadiness(sessionLogs: Record<string, SessionLog>, asOfDate: string, n = 3): Readiness[] {
@@ -182,34 +185,27 @@ export default function Today() {
     <div className="flex h-full flex-col">
       <PhaseBadge week={week} phase={phase} dateLabel={format(selectedDate, 'EEE d MMM')} />
 
-      <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-2">
-        <button
-          type="button"
-          disabled={!canGoBack}
-          onClick={goToPreviousDay}
-          className="min-h-11 min-w-11 text-text disabled:opacity-30"
-        >
-          ←
-        </button>
-        {isViewingToday ? (
-          <span className="text-sm text-muted">Today</span>
-        ) : (
-          <button
-            type="button"
-            onClick={goToToday}
-            className="min-h-11 rounded bg-warn px-3 text-xs font-medium text-bg"
-          >
-            Viewing {format(selectedDate, 'EEE d MMM')} — tap to jump to today
-          </button>
-        )}
-        <button
-          type="button"
-          disabled={!canGoForward}
-          onClick={goToNextDay}
-          className="min-h-11 min-w-11 text-text disabled:opacity-30"
-        >
-          →
-        </button>
+      <div className="border-b border-line bg-surface px-4 py-2">
+        <PagerNav
+          className="flex w-full items-center justify-between"
+          onPrev={goToPreviousDay}
+          onNext={goToNextDay}
+          disablePrev={!canGoBack}
+          disableNext={!canGoForward}
+          center={
+            isViewingToday ? (
+              <span className="text-sm text-muted">Today</span>
+            ) : (
+              <button
+                type="button"
+                onClick={goToToday}
+                className="min-h-11 rounded border border-line bg-surface-2 px-3 text-xs font-medium text-text"
+              >
+                Viewing {format(selectedDate, 'EEE d MMM')} — tap to jump to today
+              </button>
+            )
+          }
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -234,9 +230,9 @@ export default function Today() {
         )}
 
         {runGate && week >= 3 && (
-          <section className="mt-4 rounded border border-line bg-surface p-3">
+          <Card className="mt-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-text">Optional second run</span>
+              <SectionHeader>Optional second run</SectionHeader>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                   runGate.eligible ? 'bg-good text-bg' : 'bg-bad text-bg'
@@ -255,7 +251,7 @@ export default function Today() {
                 </li>
               ))}
             </ul>
-          </section>
+          </Card>
         )}
 
         {isSunday && isBenchmarkWeek ? (
@@ -264,11 +260,11 @@ export default function Today() {
           </section>
         ) : (
           amExercises.length > 0 && (
-            <section className="mt-4 rounded border border-line bg-surface p-3">
+            <Card className="mt-4">
               <div className="flex items-baseline justify-between">
-                <span className="text-sm text-text">
+                <SectionHeader>
                   AM · {amExercises.length} exercise{amExercises.length === 1 ? '' : 's'}
-                </span>
+                </SectionHeader>
                 {amSession?.completedAt && <span className="text-xs text-good">Done ✓</span>}
               </div>
 
@@ -306,24 +302,24 @@ export default function Today() {
               >
                 {amInProgress ? 'Resume AM session' : 'Start AM session'}
               </button>
-            </section>
+            </Card>
           )
         )}
 
         {mainExercises.length === 0 ? (
-          <section className="mt-4 rounded border border-line bg-surface p-3">
+          <Card className="mt-4">
             <p className="text-sm text-text">No hard training today</p>
             <p className="mt-1 text-xs text-muted">
               Mobility checklist above. Don't forget to log weight and calories.
             </p>
-          </section>
+          </Card>
         ) : (
-          <section className="mt-4 rounded border border-line bg-surface p-3">
+          <Card className="mt-4">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-text">
+              <SectionHeader>
                 {isSunday ? 'RUN' : 'MAIN'} · {mainExercises.length} exercise
                 {mainExercises.length === 1 ? '' : 's'}
-              </span>
+              </SectionHeader>
             </div>
             <div className="mt-2 divide-y divide-line">
               {mainExercises.map((exercise) => (
@@ -342,12 +338,12 @@ export default function Today() {
             >
               {mainInProgress ? 'Resume session' : isSunday ? 'Start run' : 'Start session'}
             </button>
-          </section>
+          </Card>
         )}
 
-        <section className="mt-4 rounded border border-line bg-surface p-3">
+        <Card className="mt-4">
           <DailyEntryFields date={dateStr} showSummary />
-        </section>
+        </Card>
 
         {isSunday && (
           <button

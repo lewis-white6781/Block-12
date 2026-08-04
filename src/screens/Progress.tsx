@@ -5,7 +5,7 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Too
 import { useStore } from '../store/useStore';
 import { dayTitles, program } from '../data/program';
 import { ladders } from '../data/ladders';
-import { dayIdForDate } from '../domain/phase';
+import { currentWeek, dayIdForDate, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
 import { SKILLS } from '../domain/analysis';
 import { rolling7Weight } from '../domain/body';
@@ -20,6 +20,9 @@ import {
 import type { DayId, Exercise, Ladder, SessionLog } from '../domain/types';
 import ProgressChart from '../components/ProgressChart';
 import Sheet from '../components/Sheet';
+import PhaseBadge from '../components/PhaseBadge';
+import Card from '../components/Card';
+import SectionHeader from '../components/SectionHeader';
 
 const SKILL_COLOR: Record<string, string> = {
   frontLever: 'var(--good)',
@@ -100,7 +103,7 @@ function ExercisePickerSheet({
       <div className="mt-3 max-h-[55vh] overflow-y-auto">
         {searchResults ? (
           searchResults.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted">No matches.</p>
+            <p className="py-4 text-center text-sm text-muted">No exercises match — try a different search.</p>
           ) : (
             <ul className="divide-y divide-line">
               {searchResults.map((e) => (
@@ -286,8 +289,13 @@ export default function Progress() {
       .slice(0, 8);
   }, [sessionLogs]);
 
+  const week = currentWeek(startOfToday(), settings.blockStartDate);
+
   return (
-    <div className="p-4">
+    <div className="flex h-full flex-col">
+      <PhaseBadge week={week} phase={phaseForWeek(week)} dateLabel={format(startOfToday(), 'EEE d MMM')} />
+
+      <div className="flex-1 overflow-y-auto p-4">
       <h1 className="font-display text-2xl text-text">Progress</h1>
 
       <section className="mt-4 grid grid-cols-2 gap-2">
@@ -295,7 +303,7 @@ export default function Progress() {
           if (!h) return null;
           const unit = h.exercise.metric === 'hold' || h.exercise.metric === 'attempts' ? 's' : '';
           return (
-            <div key={h.skill.id} className="rounded border border-line bg-surface p-3">
+            <Card key={h.skill.id}>
               <div className="text-xs uppercase tracking-wide text-muted">{h.skill.label}</div>
               <div className="mt-1 text-xs text-muted">{h.variantLabel ?? '—'}</div>
               <div className="mt-1 font-display text-2xl tabular-nums text-text">
@@ -311,12 +319,12 @@ export default function Progress() {
                   </span>
                 )}
               </div>
-            </div>
+            </Card>
           );
         })}
       </section>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
+      <Card className="mt-4">
         <label className="block text-sm">
           <span className="text-xs text-muted">Exercise</span>
           <button
@@ -349,10 +357,10 @@ export default function Progress() {
             />
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Difficulty timeline</span>
+      <Card className="mt-4">
+        <SectionHeader>Difficulty timeline</SectionHeader>
         <ResponsiveContainer width="100%" height={180}>
           <LineChart data={difficultyTimeline} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
@@ -412,11 +420,11 @@ export default function Progress() {
             </ul>
           )}
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 overflow-x-auto rounded border border-line bg-surface p-3">
+      <Card className="mt-4 overflow-x-auto">
         <div className="flex items-baseline justify-between">
-          <span className="text-sm text-text">Consistency</span>
+          <SectionHeader>Consistency</SectionHeader>
           <span className="text-xs tabular-nums text-muted">{streak}-day streak</span>
         </div>
         <div className="mt-2 flex gap-1">
@@ -443,10 +451,10 @@ export default function Progress() {
             </div>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Flag frequency</span>
+      <Card className="mt-4">
+        <SectionHeader>Flag frequency</SectionHeader>
         {flagFrequency.length === 0 ? (
           <p className="mt-2 text-xs text-muted">No technique flags logged yet.</p>
         ) : (
@@ -469,7 +477,8 @@ export default function Progress() {
             </BarChart>
           </ResponsiveContainer>
         )}
-      </section>
+      </Card>
+      </div>
     </div>
   );
 }

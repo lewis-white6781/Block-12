@@ -7,11 +7,9 @@ import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { startSyncTriggers } from '../sync/syncEngine';
+import { inputClass } from '../styles/ui';
 
 type AuthState = 'checking' | 'signed-out' | 'code-sent' | 'signed-in';
-
-const inputClass =
-  'min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-base text-text';
 
 export default function Auth({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>('checking');

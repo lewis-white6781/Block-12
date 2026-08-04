@@ -9,6 +9,9 @@ import { PHASE_NOTES } from '../domain/review';
 import type { DayId, Exercise } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
 import { formatPrescription } from '../components/ExerciseCard';
+import Card from '../components/Card';
+import SectionHeader from '../components/SectionHeader';
+import PagerNav from '../components/PagerNav';
 
 const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAY_LABEL: Record<DayId, string> = {
@@ -92,25 +95,13 @@ export default function Program() {
       <div className="flex-1 overflow-y-auto p-4 text-text">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl text-text">Program</h1>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={week <= 1}
-              onClick={() => setWeek((w) => w - 1)}
-              className="min-h-11 min-w-11 text-text disabled:opacity-30"
-            >
-              ←
-            </button>
-            <span className="tabular-nums text-sm text-muted">Week {week}</span>
-            <button
-              type="button"
-              disabled={week >= 12}
-              onClick={() => setWeek((w) => w + 1)}
-              className="min-h-11 min-w-11 text-text disabled:opacity-30"
-            >
-              →
-            </button>
-          </div>
+          <PagerNav
+            onPrev={() => setWeek((w) => w - 1)}
+            onNext={() => setWeek((w) => w + 1)}
+            disablePrev={week <= 1}
+            disableNext={week >= 12}
+            center={<span className="tabular-nums text-sm text-muted">Week {week}</span>}
+          />
         </div>
 
         <div className="mt-3 flex gap-1">
@@ -130,39 +121,39 @@ export default function Program() {
 
         <h2 className="mt-4 font-display text-lg text-text">{dayTitles[dayId]}</h2>
 
-        <section className="mt-2 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">AM</span>
+        <Card className="mt-2">
+          <SectionHeader>AM</SectionHeader>
           {amExercises.length === 0 ? (
             <p className="mt-1 text-xs text-muted">No AM work this day.</p>
           ) : (
-            <div className="mt-1 divide-y divide-line">
+            <div className="mt-2 divide-y divide-line">
               {amExercises.map((exercise) => (
                 <ExerciseEntry key={exercise.id} exercise={exercise} week={week} />
               ))}
             </div>
           )}
-        </section>
+        </Card>
 
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">Main</span>
+        <Card className="mt-4">
+          <SectionHeader>Main</SectionHeader>
           {mainExercises.length === 0 ? (
             <p className="mt-1 text-xs text-muted">No hard training today.</p>
           ) : (
-            <div className="mt-1 divide-y divide-line">
+            <div className="mt-2 divide-y divide-line">
               {mainExercises.map((exercise) => (
                 <ExerciseEntry key={exercise.id} exercise={exercise} week={week} />
               ))}
             </div>
           )}
-        </section>
+        </Card>
 
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">Phase — {phase}</span>
+        <Card className="mt-4">
+          <SectionHeader>Phase — {phase}</SectionHeader>
           <p className="mt-2 text-sm text-text">{PHASE_NOTES[phase]}</p>
-        </section>
+        </Card>
 
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">RPE reference</span>
+        <Card className="mt-4">
+          <SectionHeader>RPE reference</SectionHeader>
           <table className="mt-2 w-full text-left text-xs">
             <thead>
               <tr className="text-muted">
@@ -180,27 +171,27 @@ export default function Program() {
             </tbody>
           </table>
           <p className="mt-2 text-xs text-muted">Most skill work stays at RPE 6–8.5.</p>
-        </section>
+        </Card>
 
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">Universal stop rules</span>
+        <Card className="mt-4">
+          <SectionHeader>Universal stop rules</SectionHeader>
           <p className="mt-1 text-xs text-muted">Stop a skill exercise when:</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-text">
             {UNIVERSAL_STOP_RULES.map((rule, i) => (
               <li key={i}>{rule}</li>
             ))}
           </ul>
-        </section>
+        </Card>
 
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">Progressive overload</span>
+        <Card className="mt-4">
+          <SectionHeader>Progressive overload</SectionHeader>
           <p className="mt-1 text-xs text-muted">Progress an exercise along any one of these axes:</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-text">
             {PROGRESSIVE_OVERLOAD_AXES.map((axis, i) => (
               <li key={i}>{axis}</li>
             ))}
           </ul>
-        </section>
+        </Card>
       </div>
     </div>
   );

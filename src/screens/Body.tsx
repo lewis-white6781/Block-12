@@ -11,12 +11,15 @@ import {
   weeklyRateKg,
   weeklySummaries,
 } from '../domain/body';
-import { currentWeek } from '../domain/phase';
+import { currentWeek, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
 import { convertWeight } from '../domain/units';
 import DailyEntryFields from '../components/DailyEntryFields';
 import WeightChart from '../components/WeightChart';
 import Stat from '../components/Stat';
+import PhaseBadge from '../components/PhaseBadge';
+import Card from '../components/Card';
+import SectionHeader from '../components/SectionHeader';
 
 const STATUS_COPY: Record<string, string> = {
   onTrack: 'On track',
@@ -66,10 +69,13 @@ export default function Body() {
   );
 
   return (
-    <div className="p-4">
-      <h1 className="font-display text-2xl text-text">Body</h1>
+    <div className="flex h-full flex-col">
+      <PhaseBadge week={week} phase={phaseForWeek(week)} dateLabel={format(startOfToday(), 'EEE d MMM')} />
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
+      <div className="flex-1 overflow-y-auto p-4">
+        <h1 className="font-display text-2xl text-text">Body</h1>
+
+      <Card className="mt-4">
         <label className="mb-2 block text-xs text-muted">
           Date
           <input
@@ -81,11 +87,11 @@ export default function Body() {
           />
         </label>
         <DailyEntryFields date={selectedDate} />
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
+      <Card className="mt-4">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm text-text">Weight</span>
+          <SectionHeader>Weight</SectionHeader>
           {status && (
             <span
               className={`rounded-full px-2 py-0.5 text-xs ${
@@ -113,10 +119,10 @@ export default function Body() {
             }
           />
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Calories · last 7 days</span>
+      <Card className="mt-4">
+        <SectionHeader>Calories · last 7 days</SectionHeader>
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
@@ -128,12 +134,13 @@ export default function Body() {
             <Bar dataKey="calories" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">
-          Protein · last 7 days <span className="text-muted">(target {settings.proteinTargetLow}–{settings.proteinTargetHigh} g)</span>
-        </span>
+      <Card className="mt-4">
+        <SectionHeader>Protein · last 7 days</SectionHeader>
+        <p className="mt-0.5 text-xs text-muted">
+          Target {settings.proteinTargetLow}–{settings.proteinTargetHigh} g
+        </p>
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
@@ -152,15 +159,15 @@ export default function Body() {
             <Bar dataKey="proteinG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">
-          Carbs · last 7 days
-          {settings.carbTargetLow !== undefined && settings.carbTargetHigh !== undefined && (
-            <span className="text-muted"> (target {settings.carbTargetLow}–{settings.carbTargetHigh} g)</span>
-          )}
-        </span>
+      <Card className="mt-4">
+        <SectionHeader>Carbs · last 7 days</SectionHeader>
+        {settings.carbTargetLow !== undefined && settings.carbTargetHigh !== undefined && (
+          <p className="mt-0.5 text-xs text-muted">
+            Target {settings.carbTargetLow}–{settings.carbTargetHigh} g
+          </p>
+        )}
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
@@ -181,15 +188,15 @@ export default function Body() {
             <Bar dataKey="carbsG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">
-          Fat · last 7 days
-          {settings.fatTargetLow !== undefined && settings.fatTargetHigh !== undefined && (
-            <span className="text-muted"> (target {settings.fatTargetLow}–{settings.fatTargetHigh} g)</span>
-          )}
-        </span>
+      <Card className="mt-4">
+        <SectionHeader>Fat · last 7 days</SectionHeader>
+        {settings.fatTargetLow !== undefined && settings.fatTargetHigh !== undefined && (
+          <p className="mt-0.5 text-xs text-muted">
+            Target {settings.fatTargetLow}–{settings.fatTargetHigh} g
+          </p>
+        )}
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
@@ -210,10 +217,10 @@ export default function Body() {
             <Bar dataKey="fatG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
-      </section>
+      </Card>
 
-      <section className="mt-4 overflow-x-auto rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Weekly summary</span>
+      <Card className="mt-4 overflow-x-auto">
+        <SectionHeader>Weekly summary</SectionHeader>
         <table className="mt-2 w-full min-w-[560px] text-left text-xs">
           <thead>
             <tr className="text-muted">
@@ -250,7 +257,8 @@ export default function Body() {
             ))}
           </tbody>
         </table>
-      </section>
+      </Card>
+      </div>
     </div>
   );
 }

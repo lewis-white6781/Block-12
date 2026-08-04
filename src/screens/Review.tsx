@@ -5,7 +5,7 @@ import { program } from '../data/program';
 import { ladders } from '../data/ladders';
 import { targets } from '../data/targets';
 import { weeklyProgressionVariables } from '../data/mobility';
-import { currentWeek } from '../domain/phase';
+import { currentWeek, phaseForWeek } from '../domain/phase';
 import { startOfToday, todayISO } from '../domain/clock';
 import { rolling7Weight } from '../domain/body';
 import { convertWeight } from '../domain/units';
@@ -13,6 +13,11 @@ import { buildExerciseHistory, computeSetScore, exerciseProgressIndex } from '..
 import { buildWeeklyReview, checkEndOfBlockTargets } from '../domain/review';
 import type { TargetStatus } from '../domain/review';
 import BenchmarkForm from '../components/BenchmarkForm';
+import PhaseBadge from '../components/PhaseBadge';
+import Card from '../components/Card';
+import SectionHeader from '../components/SectionHeader';
+import PagerNav from '../components/PagerNav';
+import Stat from '../components/Stat';
 
 const CORRIDOR_COPY: Record<string, string> = {
   onTrack: 'On track',
@@ -78,100 +83,73 @@ export default function Review() {
     review.firedFlags.oneVariableOverrides;
 
   return (
-    <div className="p-4">
+    <div className="flex h-full flex-col">
+      <PhaseBadge week={selectedWeek} phase={phaseForWeek(selectedWeek)} dateLabel="Review" />
+
+      <div className="flex-1 overflow-y-auto p-4">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl text-text">Review</h1>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={selectedWeek <= 1}
-            onClick={() => setSelectedWeek((w) => w - 1)}
-            className="min-h-11 min-w-11 text-text disabled:opacity-30"
-          >
-            ←
-          </button>
-          <span className="tabular-nums text-sm text-muted">Week {selectedWeek}</span>
-          <button
-            type="button"
-            disabled={selectedWeek >= 12}
-            onClick={() => setSelectedWeek((w) => w + 1)}
-            className="min-h-11 min-w-11 text-text disabled:opacity-30"
-          >
-            →
-          </button>
-        </div>
+        <PagerNav
+          onPrev={() => setSelectedWeek((w) => w - 1)}
+          onNext={() => setSelectedWeek((w) => w + 1)}
+          disablePrev={selectedWeek <= 1}
+          disableNext={selectedWeek >= 12}
+          center={<span className="tabular-nums text-sm text-muted">Week {selectedWeek}</span>}
+        />
       </div>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Sessions</span>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <div className="text-xs text-muted">Main</div>
-            <div className="font-display text-2xl tabular-nums text-text">
-              {review.sessionsCompleted.main}/{review.sessionsPlanned.main}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">AM</div>
-            <div className="font-display text-2xl tabular-nums text-text">
-              {review.sessionsCompleted.am}/{review.sessionsPlanned.am}
-            </div>
-          </div>
+      <Card className="mt-4">
+        <SectionHeader>Sessions</SectionHeader>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Stat label="Main" value={`${review.sessionsCompleted.main}/${review.sessionsPlanned.main}`} />
+          <Stat label="AM" value={`${review.sessionsCompleted.am}/${review.sessionsPlanned.am}`} />
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Weight</span>
-        <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-          <div>
-            <div className="text-xs text-muted">Mean</div>
-            <div className="tabular-nums text-text">
-              {review.weight.meanKg !== null ? `${convertWeight(review.weight.meanKg, settings.weightUnit).toFixed(1)} ${settings.weightUnit}` : '—'}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">Rate</div>
-            <div className="tabular-nums text-text">
-              {review.weight.rateKgPerWeek !== null
+      <Card className="mt-4">
+        <SectionHeader>Weight</SectionHeader>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Stat
+            label="Mean"
+            value={
+              review.weight.meanKg !== null
+                ? `${convertWeight(review.weight.meanKg, settings.weightUnit).toFixed(1)} ${settings.weightUnit}`
+                : '—'
+            }
+          />
+          <Stat
+            label="Rate"
+            value={
+              review.weight.rateKgPerWeek !== null
                 ? `${review.weight.rateKgPerWeek <= 0 ? '−' : '+'}${Math.abs(convertWeight(review.weight.rateKgPerWeek, settings.weightUnit)).toFixed(2)} ${settings.weightUnit}/wk`
-                : '—'}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">Status</div>
-            <div className="text-text">{review.weight.status ? CORRIDOR_COPY[review.weight.status] : '—'}</div>
-          </div>
+                : '—'
+            }
+          />
+          <Stat label="Status" value={review.weight.status ? CORRIDOR_COPY[review.weight.status] : '—'} />
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Nutrition</span>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <div className="text-xs text-muted">Protein in range</div>
-            <div className="tabular-nums text-text">{review.nutrition.proteinAdherenceDays}/7 days</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">Mean kcal</div>
-            <div className="tabular-nums text-text">{review.nutrition.meanCalories !== null ? review.nutrition.meanCalories.toFixed(0) : '—'}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">Mean carbs</div>
-            <div className="tabular-nums text-text">
-              {review.nutrition.meanCarbsG !== null ? `${review.nutrition.meanCarbsG.toFixed(0)} g` : '—'}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">Mean fat</div>
-            <div className="tabular-nums text-text">
-              {review.nutrition.meanFatG !== null ? `${review.nutrition.meanFatG.toFixed(0)} g` : '—'}
-            </div>
-          </div>
+      <Card className="mt-4">
+        <SectionHeader>Nutrition</SectionHeader>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Stat label="Protein in range" value={`${review.nutrition.proteinAdherenceDays}/7 days`} />
+          <Stat
+            label="Mean kcal"
+            value={review.nutrition.meanCalories !== null ? review.nutrition.meanCalories.toFixed(0) : '—'}
+          />
+          <Stat
+            label="Mean carbs"
+            value={review.nutrition.meanCarbsG !== null ? `${review.nutrition.meanCarbsG.toFixed(0)} g` : '—'}
+          />
+          <Stat
+            label="Mean fat"
+            value={review.nutrition.meanFatG !== null ? `${review.nutrition.meanFatG.toFixed(0)} g` : '—'}
+          />
         </div>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Skill Progress Index — this week</span>
+      <Card className="mt-4">
+        <SectionHeader>Skill Progress Index — this week</SectionHeader>
         <ul className="mt-2 space-y-1 text-sm">
           {review.skillDeltas.map(({ skill, progressIndex, deltaVsLastWeek }) => (
             <li key={skill.id} className="flex items-center justify-between">
@@ -189,10 +167,10 @@ export default function Review() {
             </li>
           ))}
         </ul>
-      </section>
+      </Card>
 
-      <section className="mt-4 rounded border border-line bg-surface p-3">
-        <span className="text-sm text-text">Fired flags</span>
+      <Card className="mt-4">
+        <SectionHeader>Fired flags</SectionHeader>
         {totalFired === 0 ? (
           <p className="mt-2 text-xs text-muted">Nothing fired this week.</p>
         ) : (
@@ -223,13 +201,13 @@ export default function Review() {
             )}
           </div>
         )}
-      </section>
+      </Card>
 
       {review.nextWeek && (
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">
+        <Card className="mt-4">
+          <SectionHeader>
             Next week's focus — week {review.nextWeek.week} {review.nextWeek.phase.toUpperCase()}
-          </span>
+          </SectionHeader>
           <p className="mt-2 text-sm text-text">{review.nextWeek.phaseNote}</p>
           {review.nextWeek.mobilityVariable && (
             <p className="mt-1 text-xs text-muted">Mobility: {review.nextWeek.mobilityVariable}</p>
@@ -241,7 +219,7 @@ export default function Review() {
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       )}
 
       {review.benchmarkWeek && (
@@ -251,8 +229,8 @@ export default function Review() {
       )}
 
       {targetChecklist && (
-        <section className="mt-4 rounded border border-line bg-surface p-3">
-          <span className="text-sm text-text">Week-12 target checklist</span>
+        <Card className="mt-4">
+          <SectionHeader>Week-12 target checklist</SectionHeader>
           <div className="mt-2 space-y-3">
             {targetChecklist.map((group) => (
               <div key={group.id}>
@@ -268,8 +246,9 @@ export default function Review() {
               </div>
             ))}
           </div>
-        </section>
+        </Card>
       )}
+      </div>
     </div>
   );
 }
