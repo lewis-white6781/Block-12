@@ -4,6 +4,97 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-08-04
+
+Monday reprogrammed, the progress maths made readable, day navigation
+unlocked, and an update channel that actually reaches the phone. Documented
+formally in [SPEC-V3.0.md](./SPEC-V3.0.md) — see its §0/§1 for every
+superseded line.
+
+### Changed — training
+
+- **Monday main slot 1** is now **Partial ROM wall HSPU** (reps + range of
+  motion, 4×3–5 at RPE 7 in week 1, progressing to 6–8 by week 10), replacing
+  freestanding handstand balance attempts.
+- **Monday main slot 3** is now **Belly-to-wall HSPU negative** (3×5–8 at
+  RPE 7 in week 1), replacing the band-assisted bent-arm press to handstand.
+  Rep targets are deliberately higher than slot 1's in every week — the
+  eccentric is the accessible half of the movement, so it carries the volume.
+- Both were above the athlete's current level, so the slots produced no logged
+  data and therefore no progression signal. The progression mechanism is
+  unchanged: same stop-rule engine, same one-variable rule, same phase RPE
+  caps.
+- Slots 2, 4, 5 and the whole Monday AM block are untouched, pinned by test.
+- **Range of motion is now a logged number** (`romCm` — pad height at the
+  bottom of the rep, lower is deeper), shown only for exercises that progress
+  on ROM.
+- Note: Monday now runs four consecutive pressing movements. The existing
+  elbow/shoulder volume warnings are the tripwire; see SPEC-V3.0.md §3.
+
+### Changed — progress
+
+- **The Difficulty Index and Exercise Progress Index are gone.** Nothing in the
+  app displays a unitless number any more. `effectiveLevel`, the
+  `1 + 0.2 × effLevel` multiplier and `current/baseline × 100` mixed variant
+  difficulty into what was presented as performance, so a variant change looked
+  like progress and a genuine rep PR at an easier variant looked like a
+  regression.
+- Skill cards now show the plain best in the movement's own unit, a trend
+  arrow, the same figure four weeks ago, and a breakdown per variant and
+  assistance tier — like compared with like, rather than fudged by a
+  coefficient.
+- The shared "Difficulty timeline" chart is replaced by a per-skill best-by-week
+  sparkline. Four skills with four different units on one Y axis could not be
+  read.
+- Per-exercise chart offers "Best set" and "Total volume" in the real unit;
+  "Relative est. 1RM" now only where there is a load to be relative to.
+
+### Changed — navigation
+
+- **Every one of the block's 84 days is reachable and editable**, in both
+  directions, past and future. Future days carry an "Upcoming" chip.
+- "Block complete" is a banner rather than a screen takeover — week 12 passing
+  used to lock you out of your own 12 weeks of data.
+- A 7-dot week strip marks which days have logged sets.
+
+### Fixed
+
+- **The day pager froze after midnight.** Screens captured "today" once at
+  mount; an installed PWA is rarely reloaded, so the forward bound stayed on
+  yesterday and the pager silently refused to advance. `useToday` now resyncs on
+  foreground and at the midnight boundary.
+- **Deployed updates did not reach the installed PWA.** The service worker's
+  cache version was a hardcoded string, so its bytes never changed, no update
+  was ever detected, and a cold launch on a flaky connection could run the
+  previous build indefinitely. The worker is now build-stamped, checked on
+  foreground/reconnect/15-minute timer, and swapped in when safe — never
+  mid-session, and always after flushing local writes to Supabase.
+- **"Reset block" was undone by the next sync.** The merge unions keys and had
+  no way to express deletion, so a second device's stale copy re-added every
+  deleted record. Fixed via `settings.resetAt` as a tombstone cutoff.
+  (SPEC-V2.0.md acceptance test 60 asserted this already worked; it never did,
+  and is now marked superseded in place.)
+- **Sets could visibly flip-flop between devices.** The push was a blind upsert
+  with no concurrency check. It now re-reads `updated_at` before pushing and
+  re-merges once.
+- **Long decimals everywhere.** The weight-corridor band was rendering values
+  like `76.94642857142858`. Nothing displayed anywhere now exceeds 2 decimal
+  places, charts and tooltips included.
+
+### Added
+
+- Sync status on every screen, in the header, tappable to force a sync.
+- Version and build id in Settings' About card, plus "Check for updates".
+- A one-time "Updated to vX" toast after an update lands.
+- A retired-exercise registry, so programming can change mid-block without
+  orphaning data already logged under the old programming.
+
+### Data model
+
+- `SCHEMA_VERSION` 4. `STORAGE_KEY` stays `block12:v1`.
+- `SetLog.romCm?` and `Settings.resetAt?` added; `migrateToV4` rescores every
+  stored set to its plain value. Historical exercise ids are never rewritten.
+
 ## [2.1.0] - 2026-08-03
 
 Multi-device cloud sync plus a UI-consistency pass, shipped together.
