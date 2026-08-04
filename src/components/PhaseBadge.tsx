@@ -1,5 +1,6 @@
 // SPEC.md section 7.1 header row + section 8's persistent 12-segment block bar.
 import type { Phase } from '../domain/types';
+import SyncPill from './SyncPill';
 
 const PHASE_LABEL: Record<Phase, string> = {
   calibration: 'CALIBRATION',
@@ -25,6 +26,12 @@ export default function PhaseBadge({ week, phase, dateLabel }: PhaseBadgeProps) 
           WEEK {String(week).padStart(2, '0')} {PHASE_LABEL[phase]}
         </span>
         <span className="text-sm text-muted">{dateLabel}</span>
+      </div>
+      {/* v3.0: sync status on every screen, not buried in Settings
+          (SPEC-V3.0.md section 6). PhaseBadge is the one header every screen
+          already renders, so this reaches all of them without a layout change. */}
+      <div className="mt-0.5 flex justify-end">
+        <SyncPill />
       </div>
       <div className="mt-2 flex gap-1">
         {Array.from({ length: 12 }, (_, i) => i + 1).map((w) => (

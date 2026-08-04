@@ -12,6 +12,7 @@ import { checkStopRule } from '../domain/analysis';
 import { convertWeight, fmtKg, parseWeight } from '../domain/units';
 import { roundTo } from '../domain/format';
 import { newId } from '../domain/id';
+import { runSync } from '../sync/syncEngine';
 import type { WeightUnit } from '../domain/units';
 import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
 import { formatPrescription } from '../components/ExerciseCard';
@@ -212,6 +213,10 @@ export default function SessionRunner() {
       <SessionEndForm
         onFinish={(sessionRpe, note) => {
           completeSession(sessionId, { sessionRpe, note });
+          // Finishing a session is the moment the athlete most wants their
+          // other device to be current, and the moment they are most likely
+          // to put the phone away — don't wait out the 2 s write debounce.
+          void runSync();
           navigate('/');
         }}
         onBack={() => setEnding(false)}
