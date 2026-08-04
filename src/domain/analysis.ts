@@ -17,7 +17,12 @@ export interface SkillDefinition {
 
 export const SKILLS: SkillDefinition[] = [
   { id: 'frontLever', label: 'Front lever', exerciseId: 'fl-hard-iso', ladderId: 'frontLever' },
-  { id: 'hspu', label: 'HSPU/handstand', exerciseId: 'hs-balance-primary', ladderId: 'handstandEntry' },
+  // v3.0: was `hs-balance-primary` on the handstandEntry ladder. That exercise
+  // is retired (SPEC-V3.0.md section 3), and a headline skill must point at
+  // something still prescribed or it can never gain a new data point. Monday's
+  // new slot 1 is the natural successor: same day, same slot, same skill, and
+  // it sits on the hspu ladder that the label already named.
+  { id: 'hspu', label: 'HSPU/handstand', exerciseId: 'wall-hspu-partial', ladderId: 'hspu' },
   { id: 'pistol', label: 'Pistol', exerciseId: 'pistol', ladderId: 'pistol' },
   { id: 'pullup', label: 'Pull-up', exerciseId: 'ring-pullup' },
 ];
@@ -192,6 +197,9 @@ const ELBOW_EXERCISE_IDS = new Set([
   'ring-row',
   'face-pull',
 ]);
+// Retired ids stay in this set: joint-volume warnings read historical logs, and
+// a Monday logged before v3.0 still loaded the same shoulders (SPEC-V3.0.md
+// section 3). The two v3.0 replacements are added alongside them.
 const SHOULDER_EXERCISE_IDS = new Set([
   'pike-hspu',
   'press-to-hs',
@@ -199,6 +207,8 @@ const SHOULDER_EXERCISE_IDS = new Set([
   'planche-lean',
   'ring-pushup',
   'wall-hspu',
+  'wall-hspu-partial',
+  'belly-wall-hspu-negative',
   'hs-balance-primary',
   'hs-balance-secondary',
 ]);

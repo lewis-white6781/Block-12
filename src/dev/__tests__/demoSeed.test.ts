@@ -35,7 +35,7 @@ describe('generateDemoState', () => {
       progressionEvents: state.progressionEvents,
       mobilityVariableForWeek: (w) => weeklyProgressionVariables.find((v) => v.week === w)?.description ?? null,
     });
-    const stagnant = review.firedFlags.stagnation.find((s) => s.exerciseId === 'hs-balance-primary');
+    const stagnant = review.firedFlags.stagnation.find((s) => s.exerciseId === 'wall-hspu-partial');
     expect(stagnant).toBeDefined();
     expect(stagnant?.type).toBe('stagnant');
   });
@@ -62,7 +62,7 @@ describe('generateDemoState', () => {
   });
 
   it('keeps the stagnant exercise flat rather than improving', () => {
-    const exercise = program.find((e) => e.id === 'hs-balance-primary')!;
+    const exercise = program.find((e) => e.id === 'wall-hspu-partial')!;
     const ladder = ladders.find((l) => l.id === exercise.ladderId);
     const dailyEntriesArray = Object.values(state.dailyEntries);
     const history = buildExerciseHistory(state.sessionLogs, exercise.id, (set, date) =>

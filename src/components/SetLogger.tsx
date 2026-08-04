@@ -67,6 +67,11 @@ interface SetLoggerProps {
   intensityPct: number | undefined;
   onTapIntensity: () => void;
   onTapMinutes: () => void;
+  // ROM depth in cm. Rendered only when the exercise progresses on ROM
+  // (SPEC-V3.0.md section 2) so the other ~68 exercises gain no extra tap.
+  showRom: boolean;
+  romCm: number | undefined;
+  onTapRom: () => void;
   flags: TechniqueFlag[];
   onToggleFlag: (flag: TechniqueFlag) => void;
   onLogSet: () => void;
@@ -88,6 +93,9 @@ export default function SetLogger({
   intensityPct,
   onTapIntensity,
   onTapMinutes,
+  showRom,
+  romCm,
+  onTapRom,
   flags,
   onToggleFlag,
   onLogSet,
@@ -153,6 +161,19 @@ export default function SetLogger({
         >
           {reps ?? 0} min
         </button>
+      )}
+
+      {showRom && (
+        <label className="mt-3 block text-sm">
+          <span className="text-xs text-muted">Depth — pad height (cm), lower is deeper</span>
+          <button
+            type="button"
+            onClick={onTapRom}
+            className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-3 text-left tabular-nums text-text"
+          >
+            {romCm !== undefined ? `${romCm} cm` : 'Not set'}
+          </button>
+        </label>
       )}
 
       {metric !== 'distanceTime' && (

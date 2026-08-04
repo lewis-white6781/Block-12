@@ -27,7 +27,7 @@ const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 // Deliberately kept flat across weeks 4-6 so the stagnation detector fires on
 // it — it's a SKILLS exercise (HSPU/handstand), so it also shows up as a flat
 // line on the Progress screen's skill headline and difficulty timeline.
-const STAGNANT_EXERCISE_ID = 'hs-balance-primary';
+const STAGNANT_EXERCISE_ID = 'wall-hspu-partial';
 
 // Tiny deterministic PRNG (mulberry32) — reproducible "plausible" noise.
 function mulberry32(seed: number) {

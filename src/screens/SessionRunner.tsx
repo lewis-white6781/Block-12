@@ -47,7 +47,8 @@ function formatLoggedSet(set: SetLog, metric: Exercise['metric']): string {
   if (metric === 'attempts') return `${(set.attempts ?? []).join(',')}s`;
   if (metric === 'sprint') return `${set.distanceM ?? '—'}m @${set.intensityPct ?? '—'}%`;
   if (metric === 'distanceTime') return `${set.reps ?? '—'} min`;
-  return `${set.reps ?? '—'} reps RPE ${set.rpe ?? '—'}`;
+  const rom = set.romCm !== undefined ? ` · ${set.romCm} cm` : '';
+  return `${set.reps ?? '—'} reps RPE ${set.rpe ?? '—'}${rom}`;
 }
 
 export default function SessionRunner() {
@@ -117,8 +118,15 @@ export default function SessionRunner() {
   const [intensityPct, setIntensityPct] = useState<number | undefined>(undefined);
   const [variantId, setVariantId] = useState<string | undefined>(undefined);
   const [assistanceTier, setAssistanceTier] = useState<number | undefined>(undefined);
+  const [romCm, setRomCm] = useState<number | undefined>(undefined);
   const [flags, setFlags] = useState<TechniqueFlag[]>([]);
-  const [padField, setPadField] = useState<null | 'reps' | 'kg' | 'distance' | 'intensity' | 'minutes'>(null);
+  const [padField, setPadField] = useState<
+    null | 'reps' | 'kg' | 'distance' | 'intensity' | 'minutes' | 'rom'
+  >(null);
+
+  // ROM is only an input where the exercise actually progresses on it
+  // (SPEC-V3.0.md section 2) — currently Monday's two v3 HSPU movements.
+  const showRom = exercise?.progressionLadder.includes('greater ROM') ?? false;
 
   useEffect(() => {
     if (!exercise) return;
@@ -131,6 +139,9 @@ export default function SessionRunner() {
     setIntensityPct(undefined);
     setVariantId(previous?.log.sets.at(-1)?.variantId);
     setAssistanceTier(previous?.log.sets.at(-1)?.assistanceTier ?? 0);
+    // Depth carries forward from last session like addedKg does: it is a rig
+    // setup you dial in once, not a per-set decision.
+    setRomCm(previous?.log.sets.at(-1)?.romCm);
     setFlags([]);
     // Deliberately doesn't reset restSeconds: SPEC.md 7.2/acceptance test 9
     // requires the rest timer to survive navigating between exercises.
@@ -149,7 +160,7 @@ export default function SessionRunner() {
 
   function logCurrentSet() {
     if (!exercise) return;
-    const base = { id: newId(), techniqueFlags: flags, variantId, assistanceTier };
+    const base = { id: newId(), techniqueFlags: flags, variantId, assistanceTier, romCm };
     let setLog: SetLog;
     switch (exercise.metric) {
       case 'hold':
@@ -353,6 +364,9 @@ export default function SessionRunner() {
                   onToggleFlag={(flag) =>
                     setFlags((f) => (f.includes(flag) ? f.filter((x) => x !== flag) : [...f, flag]))
                   }
+                  showRom={showRom}
+                  romCm={romCm}
+                  onTapRom={() => setPadField('rom')}
                   onLogSet={logCurrentSet}
                 />
               </div>
@@ -405,6 +419,13 @@ export default function SessionRunner() {
         label="Minutes"
         value={reps}
         onConfirm={setReps}
+        onClose={() => setPadField(null)}
+      />
+      <NumberPad
+        open={padField === 'rom'}
+        label="Depth — pad height (cm)"
+        value={romCm}
+        onConfirm={setRomCm}
         onClose={() => setPadField(null)}
       />
     </div>

@@ -134,26 +134,35 @@ export const program: Exercise[] = [
   },
 
   // -- Main --
+  // v3.0 (SPEC-V3.0.md section 3): replaces `hs-balance-primary`, which is now
+  // in retiredExercises.ts. Judged on reps AND range of motion, not time —
+  // depth is logged per set as `romCm` (pad/block height at the bottom of the
+  // rep; lower is deeper). The hspu ladder already encodes ROM as variants
+  // (wall-hspu-partial 4 -> full 5 -> deficit 6), so no new ladder is invented.
   {
-    id: 'hs-balance-primary',
-    name: 'Handstand balance attempts (1 set = 2 attempts)',
+    id: 'wall-hspu-partial',
+    name: 'Partial ROM wall HSPU',
     day: 'mon',
     block: 'main',
     order: 1,
-    metric: 'attempts',
-    ladderId: 'handstandEntry',
+    metric: 'reps',
+    ladderId: 'hspu',
     tracked: true,
-    cues: [],
-    progressionLadder: [],
-    stopRules: [],
+    cues: [
+      'belly to wall, elbows tracking forward',
+      'lower only as far as the line holds',
+      'stop the set when depth shrinks',
+    ],
+    progressionLadder: ['greater ROM', 'cleaner line', 'more reps at the same RPE'],
+    stopRules: ['depth reduced from the first rep', 'elbows flared out of position', 'needed momentum'],
     prescriptions: [
-      { weeks: [1, 2], sets: 4, repsLow: 2, repsHigh: 2, secLow: 3, secHigh: 6, rpeLow: 6, rpeHigh: 7 },
-      { weeks: [3, 4, 5], sets: 5, repsLow: 2, repsHigh: 2, secLow: 4, secHigh: 8, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [6], sets: 3, repsLow: 2, repsHigh: 2, note: 'easy' },
-      { weeks: [7, 8, 9], sets: 5, repsLow: 2, repsHigh: 2, secLow: 5, secHigh: 10, rpeLow: 7, rpeHigh: 8 },
-      { weeks: [10], sets: 4, repsLow: 2, repsHigh: 2, note: 'high-quality' },
-      { weeks: [11], sets: 3, repsLow: 2, repsHigh: 2 },
-      { weeks: [12], sets: 1, repsLow: 3, repsHigh: 5, note: 'rested test attempts' },
+      { weeks: [1, 2], sets: 4, repsLow: 3, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
+      { weeks: [3, 4, 5], sets: 5, repsLow: 4, repsHigh: 6, rpeLow: 7.5, rpeHigh: 8 },
+      { weeks: [6], sets: 3, repsLow: 3, repsHigh: 3, rpeLow: 6, rpeHigh: 6 },
+      { weeks: [7, 8, 9], sets: 5, repsLow: 5, repsHigh: 7, rpeLow: 8, rpeHigh: 8 },
+      { weeks: [10], sets: 4, repsLow: 6, repsHigh: 8, rpeLow: 8, rpeHigh: 8.5 },
+      { weeks: [11], sets: 3, repsLow: 4, repsHigh: 4, rpeLow: 7, rpeHigh: 7 },
+      { weeks: [12], sets: 3, note: 'test reps at the deepest ROM you own' },
     ],
   },
   {
@@ -178,24 +187,30 @@ export const program: Exercise[] = [
       { weeks: [12], sets: 3, note: 'test reps or increased ROM' },
     ],
   },
+  // v3.0 (SPEC-V3.0.md section 3): replaces `press-to-hs`, which is now in
+  // retiredExercises.ts. Rep targets are deliberately HIGHER than slot 1's —
+  // the eccentric is the accessible half of the movement, so it carries the
+  // volume.
   {
-    id: 'press-to-hs',
-    name: 'Band-assisted bent-arm press to handstand',
+    id: 'belly-wall-hspu-negative',
+    name: 'Belly-to-wall HSPU negative',
     day: 'mon',
     block: 'main',
     order: 3,
     metric: 'reps',
-    ladderId: 'press',
+    ladderId: 'hspu',
     tracked: true,
-    cues: ['pause 2 s in lockout before lowering'],
-    progressionLadder: [],
-    stopRules: [],
+    cues: ['3–5 s lower under control', 'come down or step down — do not press back up'],
+    progressionLadder: ['greater ROM', 'slower lower', 'more reps at the same RPE'],
+    stopRules: ['lower became a drop', 'elbows flared out of position', 'depth reduced from the first rep'],
     prescriptions: [
-      { weeks: [1, 2, 3, 4, 5], sets: 3, repsLow: 2, repsHigh: 4, rpeLow: 6, rpeHigh: 7 },
-      { weeks: [6], sets: 2, repsLow: 2, repsHigh: 2, note: 'easy' },
-      { weeks: [7, 8, 9, 10], sets: 4, repsLow: 1, repsHigh: 3, rpeLow: 7, rpeHigh: 8 },
-      { weeks: [11], sets: 2, repsLow: 2, repsHigh: 2 },
-      { weeks: [12], sets: 2, note: 'test unassisted press & lockout' },
+      { weeks: [1, 2], sets: 3, repsLow: 5, repsHigh: 8, rpeLow: 7, rpeHigh: 7 },
+      { weeks: [3, 4, 5], sets: 4, repsLow: 6, repsHigh: 9, rpeLow: 7.5, rpeHigh: 8 },
+      { weeks: [6], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 6, rpeHigh: 6 },
+      { weeks: [7, 8, 9], sets: 4, repsLow: 7, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
+      { weeks: [10], sets: 4, repsLow: 8, repsHigh: 10, rpeLow: 8, rpeHigh: 8.5 },
+      { weeks: [11], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7 },
+      { weeks: [12], sets: 2, note: 'test reps at the deepest ROM you own' },
     ],
   },
   {

@@ -349,8 +349,15 @@ export function checkEndOfBlockTargets(input: {
       return 'unmet';
     }
     // HSPU/handstand: "consistent 8-15 s freestanding balances"
+    //
+    // v3.0: `hs-balance-primary` is retired, so this target now reads the
+    // surviving handstandEntry exercise, `toe-pulls` in Monday's AM block. It
+    // is only ever 'met' if that work has actually progressed to the
+    // freestanding-kickup variant and holds in range — which is exactly what
+    // the target asks. Checking the retired id instead would leave this
+    // permanently 'unknown', since it can never gain a week-12 set again.
     if (id === 'handstandHspu' && index === 0) {
-      const best = bestQualifyingSetInWeek(sessionLogs, 'hs-balance-primary', 12);
+      const best = bestQualifyingSetInWeek(sessionLogs, 'toe-pulls', 12);
       if (!best) return 'unknown';
       if (best.variantId !== 'freestanding-kickup') return 'unknown';
       return (best.seconds ?? 0) >= 8 && (best.seconds ?? 0) <= 15 ? 'met' : 'unmet';
