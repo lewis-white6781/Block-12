@@ -34,6 +34,125 @@ describe('migrate', () => {
     expect(result.progressionEvents).toEqual([]);
   });
 
+  // ---- v3 -> v4 (SPEC-V3.0.md section 7) ----
+
+  /** A v3 session whose scores carry the old `raw × (1 + 0.2 × effLevel)` weighting. */
+  function v3State() {
+    return {
+      schemaVersion: 3,
+      settings: { ...defaultSettings(), blockStartDate: '2026-01-05' },
+      dailyEntries: {},
+      benchmarkEntries: {},
+      progressionEvents: [],
+      sessionLogs: {
+        '2026-01-05:main': {
+          id: '2026-01-05:main',
+          date: '2026-01-05',
+          week: 1,
+          phase: 'calibration',
+          day: 'mon',
+          block: 'main',
+          startedAt: '2026-01-05T09:00:00.000Z',
+          updatedAt: '2026-01-05T09:30:00.000Z',
+          exercises: [
+            {
+              exerciseId: 'pike-hspu',
+              sets: [
+                // 6 reps at effectiveLevel 3 was stored as 6 × 1.6 = 9.6
+                { id: 'a', reps: 6, rpe: 8, variantId: 'deficit-pike', assistanceTier: 0, techniqueFlags: [], score: 9.6 },
+                { id: 'b', seconds: 12, techniqueFlags: [], score: 19.2 },
+                { id: 'c', attempts: [4, 6], techniqueFlags: [], score: 16 },
+              ],
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  it('strips the Difficulty Index weighting out of every stored set score', () => {
+    const result = migrate(v3State(), 3);
+    const sets = result.sessionLogs['2026-01-05:main'].exercises[0].sets;
+    expect(sets[0].score).toBe(6); // reps
+    expect(sets[1].score).toBe(12); // seconds
+    expect(sets[2].score).toBe(10); // summed attempt seconds
+  });
+
+  it('preserves every other field of a rescored set', () => {
+    const result = migrate(v3State(), 3);
+    const set = result.sessionLogs['2026-01-05:main'].exercises[0].sets[0];
+    expect(set.reps).toBe(6);
+    expect(set.rpe).toBe(8);
+    expect(set.variantId).toBe('deficit-pike');
+    expect(set.techniqueFlags).toEqual([]);
+  });
+
+  it('preserves session metadata and updatedAt through the v4 pass', () => {
+    const result = migrate(v3State(), 3);
+    const session = result.sessionLogs['2026-01-05:main'];
+    expect(session.week).toBe(1);
+    expect(session.day).toBe('mon');
+    expect(session.updatedAt).toBe('2026-01-05T09:30:00.000Z');
+  });
+
+  it('leaves resetAt unset on a migrated block that has never been reset', () => {
+    // Optional and absent, matching carbTargetLow/fatTargetLow — defaultSettings()
+    // deliberately omits optional fields rather than spelling them `undefined`.
+    const result = migrate(v3State(), 3);
+    expect(result.settings.resetAt).toBeUndefined();
+  });
+
+  it('preserves a resetAt that was already set', () => {
+    const reset = v3State();
+    reset.settings = { ...reset.settings, resetAt: '2026-02-01T10:00:00.000Z' };
+    expect(migrate(reset, 3).settings.resetAt).toBe('2026-02-01T10:00:00.000Z');
+  });
+
+  it('does not rescore when already at the current version', () => {
+    const alreadyV4 = { ...v3State(), schemaVersion: SCHEMA_VERSION };
+    const result = migrate(alreadyV4, SCHEMA_VERSION);
+    expect(result.sessionLogs['2026-01-05:main'].exercises[0].sets[0].score).toBe(9.6);
+  });
+
+  it('does not rewrite historical exercise ids, including ones retired from the program', () => {
+    const withRetired = v3State();
+    withRetired.sessionLogs['2026-01-05:main'].exercises[0].exerciseId = 'hs-balance-primary';
+    const result = migrate(withRetired, 3);
+    expect(result.sessionLogs['2026-01-05:main'].exercises[0].exerciseId).toBe('hs-balance-primary');
+  });
+
+  it('survives a v3 session with no exercises or no sets', () => {
+    const sparse = v3State();
+    sparse.sessionLogs['2026-01-05:main'].exercises = [];
+    expect(() => migrate(sparse, 3)).not.toThrow();
+    expect(migrate(sparse, 3).sessionLogs['2026-01-05:main'].exercises).toEqual([]);
+  });
+
+  it('carries a v1 export all the way through to v4 scoring in one pass', () => {
+    const v1 = {
+      schemaVersion: 1,
+      settings: { blockStartDate: '2026-01-05' },
+      sessionLogs: {
+        '2026-01-05:main': {
+          id: '2026-01-05:main',
+          date: '2026-01-05',
+          week: 1,
+          phase: 'calibration',
+          day: 'mon',
+          block: 'main',
+          startedAt: '2026-01-05T09:00:00.000Z',
+          exercises: [{ exerciseId: 'ring-dip', sets: [{ id: 'a', reps: 8, techniqueFlags: [], score: 14.4 }] }],
+        },
+      },
+      benchmarkEntries: [],
+    };
+    const result = migrate(v1, 1);
+    expect(result.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(result.sessionLogs['2026-01-05:main'].exercises[0].sets[0].score).toBe(8);
+    // migrateToV3's backfill still ran on the way past.
+    expect(typeof result.sessionLogs['2026-01-05:main'].updatedAt).toBe('string');
+  });
+
   it('leaves existing data untouched when migrating from the current version', () => {
     const state: PersistedState = {
       ...defaultPersistedState(),

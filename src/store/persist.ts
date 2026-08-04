@@ -4,6 +4,7 @@
 import { format, startOfWeek } from 'date-fns';
 import { program } from '../data/program';
 import { startOfToday, todayISO } from '../domain/clock';
+import { placeholderSetScore } from '../domain/scoring';
 import type {
   BenchmarkEntry,
   DailyEntry,
@@ -13,7 +14,7 @@ import type {
 } from '../domain/types';
 
 export const STORAGE_KEY = 'block12:v1';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export interface PersistedState {
   schemaVersion: number;
@@ -118,6 +119,38 @@ function migrateToV3(state: LegacyPersistedState): LegacyPersistedState {
 }
 
 /**
+ * v3 -> v4: strip the Difficulty Index weighting out of every stored
+ * SetLog.score (SPEC-V3.0.md section 1, section 7).
+ *
+ * v3 scores were `raw × (1 + 0.2 × effectiveLevel)`, so a set logged at a
+ * harder variant carried a silently inflated number. v4 scores are the plain
+ * comparable value — reps, or seconds, or summed attempt seconds — which is
+ * exactly what placeholderSetScore already computes. Without this pass, old
+ * and new rows in the same export would not be comparable to each other.
+ *
+ * `settings.resetAt` needs no work here. It is optional and only ever written
+ * by the block reset, so on a block that has never been reset it is simply
+ * absent — the same treatment carbTargetLow/fatTargetLow already get. Nothing
+ * reads it as a required field, and the merge treats "absent" as "no cutoff".
+ */
+function migrateToV4(state: LegacyPersistedState): LegacyPersistedState {
+  const sessionLogs = Object.fromEntries(
+    Object.entries((state.sessionLogs as Record<string, SessionLog>) ?? {}).map(([id, session]) => [
+      id,
+      {
+        ...session,
+        exercises: (session.exercises ?? []).map((log) => ({
+          ...log,
+          sets: (log.sets ?? []).map((set) => ({ ...set, score: placeholderSetScore(set) })),
+        })),
+      },
+    ]),
+  );
+
+  return { ...state, sessionLogs };
+}
+
+/**
  * Version-by-version migration so a schema change never wipes a block
  * mid-flight. Guards the zustand `persist` rehydration path AND the JSON
  * import path (`parseImportedState`) with the same logic.
@@ -139,6 +172,10 @@ export function migrate(persistedState: unknown, fromVersion: number): Persisted
 
   if (fromVersion < 3) {
     state = migrateToV3(state);
+  }
+
+  if (fromVersion < 4) {
+    state = migrateToV4(state);
   }
 
   return {
@@ -234,6 +271,7 @@ const CSV_HEADERS = [
   'variantId',
   'assistanceTier',
   'romNote',
+  'romCm',
   'techniqueFlags',
   'score',
 ];
@@ -276,6 +314,7 @@ export function buildSetsCSV(sessionLogs: Record<string, SessionLog>): string {
             set.variantId,
             set.assistanceTier,
             set.romNote,
+            set.romCm,
             set.techniqueFlags.join('|'),
             set.score,
           ]

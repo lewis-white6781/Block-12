@@ -264,13 +264,17 @@ export interface Settings {
 }
 ```
 
+`resetAt` is optional and written only by the block reset, so on a block that
+has never been reset it is simply absent — the same treatment
+`carbTargetLow`/`fatTargetLow` already get in `defaultSettings()`. The merge
+reads absent as "no cutoff".
+
 **Storage.** `STORAGE_KEY` remains `block12:v1`. `SCHEMA_VERSION` goes to
 `4` with a real `migrateToV4`, chained after `migrateToV3` — the same
 mechanism, not a new one. It runs on rehydration, on JSON import, and on
 the sync pull, so remote rows upgrade for free.
 
 `migrateToV4`:
-- spreads `resetAt: undefined` into settings (zustand's `persist` merges shallowly, so new fields need explicit defaults);
 - recomputes every `SetLog.score` to the plain value, stripping the old `1 + 0.2 × effectiveLevel` weighting so old and new rows are comparable;
 - leaves every historical `exerciseId` untouched, including `hs-balance-primary` and `press-to-hs`.
 
@@ -358,7 +362,7 @@ not done until every line here passes, and every test from `SPEC.md` §10,
 82. Launching with the network disabled still cold-starts the app from cache.
 83. Settings' About card shows the running version and build id, and "Check for updates" applies a pending update immediately.
 84. After an update, a toast confirms the new version exactly once, not on every subsequent launch.
-85. A stale local `block12:v1` at schemaVersion 3 migrates cleanly to 4 with `resetAt` present-but-unset and every `SetLog.score` recomputed to its plain value.
+85. A stale local `block12:v1` at schemaVersion 3 migrates cleanly to 4 with every `SetLog.score` recomputed to its plain value, every other set field preserved, and historical exercise ids left untouched.
 
 ---
 

@@ -75,6 +75,11 @@ export interface SetLog {
   variantId?: string; // snapshot of variant used
   assistanceTier?: number; // 0..3
   romNote?: string; // e.g. "feet on 40cm box", "lean 12cm"
+  // Height in cm of the pad/block stack the head touches at the bottom of the
+  // rep. LOWER IS DEEPER IS BETTER — the one field in this interface where a
+  // smaller number is a better set. Shown only for exercises whose
+  // progressionLadder includes 'greater ROM'. SPEC-V3.0.md section 2.
+  romCm?: number;
   techniqueFlags: TechniqueFlag[];
   score: number; // computed at write time AND recomputed on read
 }
@@ -172,5 +177,9 @@ export interface Settings {
   // stored/exported weight values are always kg regardless of this setting.
   weightUnit: 'kg' | 'lbs';
   reminderTime?: string;
+  // ISO timestamp of the last "Reset block". The merge tombstone cutoff: a
+  // REMOTE record older than this was deleted by the reset and must not be
+  // resurrected by the union-based merge. SPEC-V3.0.md section 6.
+  resetAt?: string;
   updatedAt: string; // ISO timestamp, bumped on any settings change
 }

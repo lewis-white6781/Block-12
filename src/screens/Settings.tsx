@@ -110,7 +110,14 @@ export default function Settings() {
   }
 
   function handleResetConfirmed() {
-    useStore.setState(defaultPersistedState());
+    // resetAt is the merge tombstone cutoff (SPEC-V3.0.md section 6). Without
+    // it the next pull would union every deleted session straight back in —
+    // mergeByKeyLWW has no other way to tell "deleted here" from "new there".
+    const fresh = defaultPersistedState();
+    useStore.setState({
+      ...fresh,
+      settings: { ...fresh.settings, resetAt: new Date().toISOString() },
+    });
     setConfirmingReset(false);
     void runSync(); // push the fresh empty state to the cloud immediately, don't wait for the next trigger
     navigate('/'); // force Today/Review's stale local date/week state to recompute from the new blockStartDate
