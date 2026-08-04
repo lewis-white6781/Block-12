@@ -1,5 +1,5 @@
 // Week/phase resolution — SPEC.md section 6.1.
-import { differenceInCalendarDays, parseISO } from 'date-fns';
+import { addDays, differenceInCalendarDays, parseISO } from 'date-fns';
 import type { Block, DayId, Exercise, Phase, Prescription } from './types';
 
 const DAY_IDS: DayId[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -21,6 +21,38 @@ export function currentWeek(today: Date, blockStartDate: string): number {
 /** True once the block has run past week 12 — the UI should show "Block complete". */
 export function isBlockComplete(today: Date, blockStartDate: string): boolean {
   return rawWeek(today, blockStartDate) > 12;
+}
+
+// ---------------------------------------------------------------------------
+// Block-day addressing — SPEC-V3.0.md section 4.
+//
+// The block is 84 consecutive days indexed 0..83 from settings.blockStartDate.
+// The Today screen shows exactly one of them, and every one of them is
+// reachable in both directions and editable. These helpers exist so the bounds
+// live in one place: before v3.0 the clamp was duplicated between the pager's
+// handlers and its disabled props, which is how they came to disagree.
+// ---------------------------------------------------------------------------
+
+export const BLOCK_DAYS = 84; // 12 weeks
+
+/** 0-based day index within the block. Negative before it, >83 after it. */
+export function blockDayIndex(date: Date, blockStartDate: string): number {
+  return differenceInCalendarDays(date, parseISO(blockStartDate));
+}
+
+/** The date at a given block-day index. Does not clamp — callers clamp first. */
+export function dateForBlockDay(blockStartDate: string, index: number): Date {
+  return addDays(parseISO(blockStartDate), index);
+}
+
+/** Clamps a block-day index into 0..83. */
+export function clampBlockDay(index: number): number {
+  return Math.min(BLOCK_DAYS - 1, Math.max(0, index));
+}
+
+/** True if this index addresses a real day of the block. */
+export function isWithinBlock(index: number): boolean {
+  return index >= 0 && index < BLOCK_DAYS;
 }
 
 export function phaseForWeek(week: number): Phase {

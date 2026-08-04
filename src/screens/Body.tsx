@@ -11,8 +11,8 @@ import {
   weeklyRateKg,
   weeklySummaries,
 } from '../domain/body';
-import { currentWeek, phaseForWeek } from '../domain/phase';
-import { startOfToday, todayISO } from '../domain/clock';
+import { BLOCK_DAYS, currentWeek, dateForBlockDay, phaseForWeek } from '../domain/phase';
+import { useToday } from '../hooks/useToday';
 import { fmt, fmtPct } from '../domain/format';
 import { tooltipFormatter } from '../components/chartFormat';
 import { fmtKg, fmtKgSigned } from '../domain/units';
@@ -34,11 +34,17 @@ export default function Body() {
   const dailyEntries = useStore((s) => s.dailyEntries);
   const sessionLogs = useStore((s) => s.sessionLogs);
 
-  const todayStr = todayISO();
+  const today = useToday();
+  const todayStr = format(today, 'yyyy-MM-dd');
   const [selectedDate, setSelectedDate] = useState(todayStr);
 
   const entriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
-  const week = currentWeek(startOfToday(), settings.blockStartDate);
+  const week = currentWeek(today, settings.blockStartDate);
+
+  // v3.0 (SPEC-V3.0.md section 4): clamped to the block, not to "today". Every
+  // day of the block is editable, including ones still ahead.
+  const blockFirstDay = settings.blockStartDate;
+  const blockLastDay = format(dateForBlockDay(settings.blockStartDate, BLOCK_DAYS - 1), 'yyyy-MM-dd');
   const unit = settings.weightUnit;
 
   const rolling = rolling7Weight(entriesArray, todayStr);
@@ -50,7 +56,7 @@ export default function Body() {
   const last7Days = useMemo(
     () =>
       Array.from({ length: 7 }, (_, i) => {
-        const d = subDays(startOfToday(), 6 - i);
+        const d = subDays(today, 6 - i);
         const date = format(d, 'yyyy-MM-dd');
         const entry = dailyEntries[date];
         return {
@@ -62,7 +68,7 @@ export default function Body() {
           fatG: entry?.fatG,
         };
       }),
-    [dailyEntries],
+    [dailyEntries, today],
   );
 
   const weeks = useMemo(
@@ -72,7 +78,7 @@ export default function Body() {
 
   return (
     <div className="flex h-full flex-col">
-      <PhaseBadge week={week} phase={phaseForWeek(week)} dateLabel={format(startOfToday(), 'EEE d MMM')} />
+      <PhaseBadge week={week} phase={phaseForWeek(week)} dateLabel={format(today, 'EEE d MMM')} />
 
       <div className="flex-1 overflow-y-auto p-4">
         <h1 className="font-display text-2xl text-text">Body</h1>
@@ -83,7 +89,8 @@ export default function Body() {
           <input
             type="date"
             value={selectedDate}
-            max={todayStr}
+            min={blockFirstDay}
+            max={blockLastDay}
             onChange={(e) => setSelectedDate(e.target.value)}
             className="ml-2 min-h-11 rounded border border-line bg-surface-2 px-2 text-text"
           />

@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { dayIdForDate, phaseForWeek, resolvePrescription } from '../phase';
+import { parseISO } from 'date-fns';
+import {
+  BLOCK_DAYS,
+  blockDayIndex,
+  clampBlockDay,
+  currentWeek,
+  dateForBlockDay,
+  dayIdForDate,
+  isBlockComplete,
+  isWithinBlock,
+  phaseForWeek,
+  resolvePrescription,
+} from '../phase';
 import { program } from '../../data/program';
 import type { DayId, Phase } from '../types';
 
@@ -96,5 +108,47 @@ describe('program totals', () => {
     // so the count is all 68 program entries (41 AM + 27 main), not just the
     // 29 previously-tracked main + 2 AM exceptions.
     expect(ids.length).toBe(68);
+  });
+});
+
+// --- Block-day addressing (SPEC-V3.0.md section 4) ---
+describe('block-day addressing', () => {
+  const start = '2026-01-05'; // a Monday
+
+  it('indexes the first day of the block as 0 and the last as 83', () => {
+    expect(blockDayIndex(parseISO('2026-01-05'), start)).toBe(0);
+    expect(blockDayIndex(parseISO('2026-03-29'), start)).toBe(BLOCK_DAYS - 1);
+  });
+
+  it('round-trips every day of the block', () => {
+    for (let i = 0; i < BLOCK_DAYS; i++) {
+      expect(blockDayIndex(dateForBlockDay(start, i), start)).toBe(i);
+    }
+  });
+
+  it('reports out-of-block dates rather than silently clamping', () => {
+    expect(blockDayIndex(parseISO('2026-01-04'), start)).toBe(-1);
+    expect(blockDayIndex(parseISO('2026-03-30'), start)).toBe(BLOCK_DAYS);
+    expect(isWithinBlock(-1)).toBe(false);
+    expect(isWithinBlock(BLOCK_DAYS)).toBe(false);
+    expect(isWithinBlock(0)).toBe(true);
+    expect(isWithinBlock(BLOCK_DAYS - 1)).toBe(true);
+  });
+
+  it('clamps into 0..83', () => {
+    expect(clampBlockDay(-5)).toBe(0);
+    expect(clampBlockDay(0)).toBe(0);
+    expect(clampBlockDay(40)).toBe(40);
+    expect(clampBlockDay(BLOCK_DAYS)).toBe(BLOCK_DAYS - 1);
+    expect(clampBlockDay(9999)).toBe(BLOCK_DAYS - 1);
+  });
+
+  it('covers exactly the 12 weeks currentWeek reports, with no gap at either end', () => {
+    expect(currentWeek(dateForBlockDay(start, 0), start)).toBe(1);
+    expect(currentWeek(dateForBlockDay(start, 6), start)).toBe(1);
+    expect(currentWeek(dateForBlockDay(start, 7), start)).toBe(2);
+    expect(currentWeek(dateForBlockDay(start, BLOCK_DAYS - 1), start)).toBe(12);
+    expect(isBlockComplete(dateForBlockDay(start, BLOCK_DAYS - 1), start)).toBe(false);
+    expect(isBlockComplete(dateForBlockDay(start, BLOCK_DAYS), start)).toBe(true);
   });
 });

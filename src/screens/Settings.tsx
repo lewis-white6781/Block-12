@@ -17,7 +17,7 @@ import { convertWeight, parseWeight } from '../domain/units';
 import { roundTo } from '../domain/format';
 import type { WeightUnit } from '../domain/units';
 import { currentWeek, phaseForWeek } from '../domain/phase';
-import { startOfToday } from '../domain/clock';
+import { useToday } from '../hooks/useToday';
 import { supabase } from '../lib/supabaseClient';
 import { runSync } from '../sync/syncEngine';
 import { useSyncStore } from '../sync/syncStore';
@@ -55,7 +55,7 @@ export default function Settings() {
   const state = useStore();
   const { settings, updateSettings } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const week = currentWeek(startOfToday(), settings.blockStartDate);
+  const week = currentWeek(useToday(), settings.blockStartDate);
 
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);

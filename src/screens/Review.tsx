@@ -1,5 +1,6 @@
 // SPEC.md section 7.6.
 import { useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { useStore } from '../store/useStore';
 import { program } from '../data/program';
 import { exerciseName } from '../data/exercises';
@@ -7,7 +8,7 @@ import { ladders } from '../data/ladders';
 import { targets } from '../data/targets';
 import { weeklyProgressionVariables } from '../data/mobility';
 import { currentWeek, phaseForWeek } from '../domain/phase';
-import { startOfToday, todayISO } from '../domain/clock';
+import { useToday } from '../hooks/useToday';
 import { fmt } from '../domain/format';
 import { fmtKg, fmtKgSigned } from '../domain/units';
 import { bestBySession, bestOf, formatBest, trendArrow } from '../domain/performance';
@@ -36,7 +37,8 @@ export default function Review() {
   const benchmarkEntries = useStore((s) => s.benchmarkEntries);
   const progressionEvents = useStore((s) => s.progressionEvents);
 
-  const [selectedWeek, setSelectedWeek] = useState(() => currentWeek(startOfToday(), settings.blockStartDate));
+  const today = useToday();
+  const [selectedWeek, setSelectedWeek] = useState(() => currentWeek(today, settings.blockStartDate));
 
   const review = useMemo(
     () =>
@@ -79,7 +81,7 @@ export default function Review() {
           benchmarkEntries,
           settings,
           week12RetentionPct,
-          asOfDate: todayISO(),
+          asOfDate: format(today, 'yyyy-MM-dd'),
         })
       : null;
 

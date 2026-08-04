@@ -7,7 +7,7 @@ import { dayTitles, program } from '../data/program';
 import { exerciseName } from '../data/exercises';
 import { ladders } from '../data/ladders';
 import { currentWeek, dayIdForDate, phaseForWeek } from '../domain/phase';
-import { startOfToday, todayISO } from '../domain/clock';
+import { useToday } from '../hooks/useToday';
 import { SKILLS } from '../domain/analysis';
 import {
   bestAsOf,
@@ -170,7 +170,8 @@ export default function Progress() {
   const progressionEvents = useStore((s) => s.progressionEvents);
 
   const dailyEntriesArray = useMemo(() => Object.values(dailyEntries), [dailyEntries]);
-  const todayStr = todayISO();
+  const today = useToday();
+  const todayStr = format(today, 'yyyy-MM-dd');
 
   // AM exercises are tracked as of v1.1 (SPEC-V1.1.md section 2), so the picker
   // now spans ~70 exercises rather than 27 -- ExercisePickerSheet groups by
@@ -193,7 +194,7 @@ export default function Progress() {
         const exercise = program.find((e) => e.id === skill.exerciseId);
         if (!exercise) return null;
         const history = bestBySession(sessionLogs, exercise);
-        const fourWeeksAgo = format(addDays(startOfToday(), -28), 'yyyy-MM-dd');
+        const fourWeeksAgo = format(addDays(today, -28), 'yyyy-MM-dd');
         const ladder = exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
         const variantLabel = (best: Best | null) =>
           ladder && best?.variantId ? ladder.variants.find((v) => v.id === best.variantId)?.label : undefined;
@@ -215,7 +216,7 @@ export default function Progress() {
           })),
         };
       }),
-    [sessionLogs],
+    [sessionLogs, today],
   );
 
   // --- Consistency heatmap ---
@@ -272,11 +273,11 @@ export default function Progress() {
       .slice(0, 8);
   }, [sessionLogs]);
 
-  const week = currentWeek(startOfToday(), settings.blockStartDate);
+  const week = currentWeek(today, settings.blockStartDate);
 
   return (
     <div className="flex h-full flex-col">
-      <PhaseBadge week={week} phase={phaseForWeek(week)} dateLabel={format(startOfToday(), 'EEE d MMM')} />
+      <PhaseBadge week={week} phase={phaseForWeek(week)} dateLabel={format(today, 'EEE d MMM')} />
 
       <div className="flex-1 overflow-y-auto p-4">
       <h1 className="font-display text-2xl text-text">Progress</h1>
