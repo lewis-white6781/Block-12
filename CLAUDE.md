@@ -2,16 +2,25 @@
 
 Single-user, offline-first PWA that runs a fixed 12-week calisthenics + cut block.
 
-The specification is in **./SPEC.md** plus its amendment **./SPEC-V1.1.md**. Both are
-authoritative and must be read together. Where they conflict, SPEC-V1.1.md wins — it
-exists precisely to record the places v1.1 deliberately departs from SPEC.md, and its
-§1 lists every superseded line. If code and spec disagree, the spec wins; if the spec
-is ambiguous, ask before inventing.
+The specification is in **./SPEC.md** plus its amendments **./SPEC-V1.1.md** and
+**./SPEC-V2.0.md**. All three are authoritative and must be read together. Where they
+conflict, the newest amendment wins — SPEC-V2.0.md over SPEC-V1.1.md over SPEC.md.
+Each amendment's own §1 lists every line it supersedes. If code and spec disagree, the
+spec wins; if the spec is ambiguous, ask before inventing.
 
-Current version: 1.0.0 shipped (tag `v1.0.0`); 1.1 in progress per SPEC-V1.1.md §4.
+Current version: 2.1.0 shipped (tag `v2.1.0`) — bundles the sync/auth/deploy work
+documented in SPEC-V2.0.md with a UI-consistency pass and the reset-and-restart
+feature. See CHANGELOG.md.
 
 ## Rules
-- No backend, no auth, no network calls at runtime. localStorage only, key `block12:v1`.
+- Sync: Supabase (Postgres + Auth). Periodic/event-triggered sync only (~30s interval,
+  on foreground, on reconnect, on local write, or manual) — no realtime subscriptions.
+  Auth is email OTP (sign-in-by-link in practice; see SPEC-V2.0.md §4) locked to one
+  allow-listed address. Never store the Supabase *service-role* key client-side — only
+  the anon/public key, via VITE_SUPABASE_ANON_KEY. localStorage remains the source of
+  truth for offline reads/writes; key stays block12:v1. See SPEC-V2.0.md.
+- Sync code (src/sync/) is a separate concern from src/domain/'s pure metric maths —
+  do not mix them.
 - TypeScript strict. No `any` in src/domain/.
 - All metric maths lives in src/domain/ as pure functions with vitest tests.
   Components read results, never compute them.
@@ -25,7 +34,9 @@ Current version: 1.0.0 shipped (tag `v1.0.0`); 1.1 in progress per SPEC-V1.1.md 
   kg/lbs is a display-and-entry concern only. See SPEC-V1.1.md §3.
 - Never change the localStorage key. Bump `SCHEMA_VERSION` and write a real migration
   instead; zustand's persist merges shallowly, so new fields need defaults spread in.
-- Run `npx tsc --noEmit` and `npx vitest run` before saying a step is done.
+- Run `npm run build` (not just `npx tsc --noEmit`, which misses errors `tsc -b`'s
+  project-references mode catches — e.g. mismatched JSX closing tags) and
+  `npx vitest run` before saying a step is done.
 - Commit after each numbered step with a conventional-commit message.
 
 ## Commands
