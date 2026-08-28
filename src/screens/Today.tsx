@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useStore } from '../store/useStore';
-import { program, dayTitles } from '../data/program';
+import { dayTitles, program, sessionTitles } from '../data/program';
 import {
   BLOCK_DAYS,
   blockDayIndex,
@@ -18,19 +18,12 @@ import {
   resolvePrescription,
 } from '../domain/phase';
 import { useToday } from '../hooks/useToday';
-import { weeklyRatePct } from '../domain/body';
-import {
-  elbowVolumeWarning,
-  isElbowWarningDay,
-  isShoulderWarningDay,
-  optionalRunGate,
-  shoulderVolumeWarning,
-} from '../domain/readiness';
-import { doNotProgressConditions, weeklyProgressionVariables } from '../data/mobility';
+import { jointVolumeWarnings } from '../domain/readiness';
+import { doNotProgressConditions, isBenchmarkWeek, weeklyProgressionVariables } from '../data/mobility';
 import { detectStagnation } from '../domain/analysis';
 import { buildPlainHistory } from '../domain/performance';
 import { daysWithLoggedWeight } from '../domain/review';
-import type { Readiness, SessionLog } from '../domain/types';
+import type { Block, Readiness, SessionLog } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
 import ReadinessCheckIn from '../components/ReadinessCheckIn';
 import ExerciseCard from '../components/ExerciseCard';
@@ -39,6 +32,9 @@ import BenchmarkForm from '../components/BenchmarkForm';
 import Card from '../components/Card';
 import SectionHeader from '../components/SectionHeader';
 import PagerNav from '../components/PagerNav';
+
+const BLOCK_ORDER: Block[] = ['am', 'main', 'later'];
+const BLOCK_LABEL: Record<Block, string> = { am: 'AM', main: 'Main', later: 'Later' };
 
 /**
  * The seven days of the displayed week, marked where something is logged —
@@ -67,9 +63,9 @@ function WeekStrip({
         if (index >= BLOCK_DAYS) return <span key={i} className="min-h-11 flex-1" />;
 
         const date = format(dateForBlockDay(blockStartDate, index), 'yyyy-MM-dd');
-        const logged =
-          (sessionLogs[`${date}:main`]?.exercises.some((e) => e.sets.length > 0) ?? false) ||
-          (sessionLogs[`${date}:am`]?.exercises.some((e) => e.sets.length > 0) ?? false);
+        const logged = BLOCK_ORDER.some(
+          (block) => sessionLogs[`${date}:${block}`]?.exercises.some((e) => e.sets.length > 0) ?? false,
+        );
         const isSelected = index === selectedIndex;
 
         return (
@@ -151,17 +147,22 @@ export default function Today() {
     setSelectedIndex(clampBlockDay(todayIndex));
   }
 
+  // v4.0: three slots per day, not two. Wednesday runs all three; Thursday runs
+  // one. Each card is hidden when the day prescribes nothing for that slot, so
+  // the screen shows the day's actual shape rather than a fixed skeleton.
+  const blocks = useMemo(
+    () =>
+      BLOCK_ORDER.map((block) => ({
+        block,
+        title: sessionTitles[dayId][block],
+        exercises: exercisesFor(program, dayId, block, week),
+      })).filter((b) => b.exercises.length > 0),
+    [dayId, week],
+  );
   const amExercises = useMemo(() => exercisesFor(program, dayId, 'am', week), [dayId, week]);
   const mainExercises = useMemo(() => exercisesFor(program, dayId, 'main', week), [dayId, week]);
 
-  const amSession = sessionLogs[`${dateStr}:am`];
-  const amInProgress = !!amSession && !amSession.completedAt;
-
-  const mainSession = sessionLogs[`${dateStr}:main`];
-  const mainInProgress = !!mainSession && !mainSession.completedAt;
-
   const isSunday = dayId === 'sun';
-  const isBenchmarkWeek = week === 1 || week === 6 || week === 12;
   const mobilityVariable = weeklyProgressionVariables.find((v) => v.week === week)?.description ?? null;
 
   const dailyEntries = useStore((s) => s.dailyEntries);
@@ -169,17 +170,10 @@ export default function Today() {
     () => recentMainReadiness(sessionLogs, dateStr),
     [sessionLogs, dateStr],
   );
-  const elbowWarning = isElbowWarningDay(dayId) ? elbowVolumeWarning(recentReadiness) : null;
-  const shoulderWarning = isShoulderWarningDay(dayId) ? shoulderVolumeWarning(recentReadiness) : null;
-  const runGate =
-    dayId === 'mon'
-      ? optionalRunGate({
-          week,
-          sessionLogs,
-          recentReadiness,
-          weeklyRatePct: weeklyRatePct(Object.values(dailyEntries), dateStr),
-        })
-      : null;
+  const jointWarnings = useMemo(
+    () => jointVolumeWarnings(dayId, recentReadiness),
+    [dayId, recentReadiness],
+  );
 
   const progressionEvents = useStore((s) => s.progressionEvents);
 
@@ -206,25 +200,28 @@ export default function Today() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mainExercises, amExercises, sessionLogs, dailyEntries, recentReadiness, dateStr, phase, progressionEvents, settings.startWeightKg]);
 
-  function handleStartAm() {
-    // No readiness gate for AM (SPEC.md 7.1 reserves that check-in for Main);
-    // startSession is idempotent, so this doubles as "resume" once a session exists.
-    startSession({ date: dateStr, block: 'am', day: dayId, week, phase });
-    navigate(`/session/${dateStr}/am`);
+  function openSession(block: Block, readiness?: Readiness) {
+    // startSession is idempotent, so this doubles as "resume" once one exists.
+    startSession({ date: dateStr, block, day: dayId, week, phase, readiness });
+    navigate(`/session/${dateStr}/${block}`);
   }
 
-  function handleStartMain() {
-    if (mainInProgress) {
-      navigate(`/session/${dateStr}/main`);
+  function handleStart(block: Block) {
+    // The readiness check-in gates the main lift only. AM is grease-the-groove
+    // at RPE 4–5 and the later slot is a recovery run or a stretch — neither is
+    // a session you would autoregulate out of, and asking would just add a
+    // five-slider form to a ten-minute jog.
+    const session = sessionLogs[`${dateStr}:${block}`];
+    if (block !== 'main' || (session && !session.completedAt)) {
+      openSession(block);
       return;
     }
     setShowReadiness(true);
   }
 
   function handleReadinessSubmit(readiness: Readiness) {
-    startSession({ date: dateStr, block: 'main', day: dayId, week, phase, readiness });
     setShowReadiness(false);
-    navigate(`/session/${dateStr}/main`);
+    openSession('main', readiness);
   }
 
   if (showReadiness) {
@@ -303,123 +300,88 @@ export default function Today() {
           </div>
         )}
 
-        {elbowWarning && (
-          <div className="mt-3 rounded bg-warn px-3 py-2 text-sm text-bg">{elbowWarning.message}</div>
-        )}
-        {shoulderWarning && (
-          <div className="mt-3 rounded bg-warn px-3 py-2 text-sm text-bg">{shoulderWarning.message}</div>
-        )}
+        {jointWarnings.map((warning) => (
+          <div key={warning.message} className="mt-3 rounded bg-warn px-3 py-2 text-sm text-bg">
+            {warning.message}
+          </div>
+        ))}
 
-        {runGate && week >= 3 && (
-          <Card className="mt-4">
-            <div className="flex items-center justify-between">
-              <SectionHeader>Optional second run</SectionHeader>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  runGate.eligible ? 'bg-good text-bg' : 'bg-bad text-bg'
-                }`}
-              >
-                {runGate.eligible ? 'Go' : 'Not yet'}
-              </span>
-            </div>
-            <ul className="mt-2 space-y-1">
-              {runGate.conditions.map((c) => (
-                <li key={c.id} className="flex items-start gap-2 text-xs">
-                  <span className={c.met ? 'text-good' : 'text-bad'}>{c.met ? '✓' : '✗'}</span>
-                  <span className="text-muted">
-                    {c.label} — {c.detail}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        {isSunday && isBenchmarkWeek ? (
+        {/* Benchmarks are measured on the Sunday of weeks 1, 8 and 12. Sunday
+            no longer has an AM block for this to displace, so it sits above the
+            day's sessions rather than replacing one. */}
+        {isSunday && isBenchmarkWeek(week) && (
           <section className="mt-4">
             <BenchmarkForm week={week} />
           </section>
-        ) : (
-          amExercises.length > 0 && (
-            <Card className="mt-4">
-              <div className="flex items-baseline justify-between">
-                <SectionHeader>
-                  AM · {amExercises.length} exercise{amExercises.length === 1 ? '' : 's'}
-                </SectionHeader>
-                {amSession?.completedAt && <span className="text-xs text-good">Done ✓</span>}
-              </div>
-
-              {mobilityVariable && (
-                <div className="mt-2 rounded bg-surface-2 px-2 py-1.5 text-xs">
-                  <span className="text-muted">This week: </span>
-                  <span className="text-text">{mobilityVariable}</span>
-                </div>
-              )}
-
-              <div className="mt-2 divide-y divide-line">
-                {amExercises.map((exercise) => (
-                  <ExerciseCard
-                    key={exercise.id}
-                    order={exercise.order}
-                    exercise={exercise}
-                    prescription={resolvePrescription(exercise, week)}
-                  />
-                ))}
-              </div>
-
-              <details className="mt-2 text-xs text-muted">
-                <summary>Don't progress if…</summary>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                  {doNotProgressConditions.map((condition) => (
-                    <li key={condition}>{condition}</li>
-                  ))}
-                </ul>
-              </details>
-
-              <button
-                type="button"
-                onClick={handleStartAm}
-                className="mt-3 min-h-11 w-full rounded bg-good text-base font-medium text-bg"
-              >
-                {amInProgress ? 'Resume AM session' : 'Start AM session'}
-              </button>
-            </Card>
-          )
         )}
 
-        {mainExercises.length === 0 ? (
+        {blocks.length === 0 ? (
           <Card className="mt-4">
-            <p className="text-sm text-text">No hard training today</p>
-            <p className="mt-1 text-xs text-muted">
-              Mobility checklist above. Don't forget to log weight and calories.
-            </p>
+            <p className="text-sm text-text">Nothing prescribed today</p>
+            <p className="mt-1 text-xs text-muted">Don't forget to log weight and calories.</p>
           </Card>
         ) : (
-          <Card className="mt-4">
-            <div className="flex items-baseline justify-between">
-              <SectionHeader>
-                {isSunday ? 'RUN' : 'MAIN'} · {mainExercises.length} exercise
-                {mainExercises.length === 1 ? '' : 's'}
-              </SectionHeader>
-            </div>
-            <div className="mt-2 divide-y divide-line">
-              {mainExercises.map((exercise) => (
-                <ExerciseCard
-                  key={exercise.id}
-                  order={exercise.order}
-                  exercise={exercise}
-                  prescription={resolvePrescription(exercise, week)}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={handleStartMain}
-              className="mt-3 min-h-11 w-full rounded bg-good text-base font-medium text-bg"
-            >
-              {mainInProgress ? 'Resume session' : isSunday ? 'Start run' : 'Start session'}
-            </button>
-          </Card>
+          blocks.map(({ block, title, exercises }) => {
+            const session = sessionLogs[`${dateStr}:${block}`];
+            const inProgress = !!session && !session.completedAt;
+            // GTG blocks are prescribed in ROUNDS of the whole list, not sets of
+            // each item, so the header has to say which it means.
+            const rounds = exercises[0]?.setsLabel === 'rounds'
+              ? resolvePrescription(exercises[0], week)?.sets
+              : undefined;
+
+            return (
+              <Card key={block} className="mt-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <SectionHeader>
+                    {BLOCK_LABEL[block]} ·{' '}
+                    {rounds !== undefined
+                      ? `${rounds} round${rounds === 1 ? '' : 's'}`
+                      : `${exercises.length} exercise${exercises.length === 1 ? '' : 's'}`}
+                  </SectionHeader>
+                  {session?.completedAt && <span className="shrink-0 text-xs text-good">Done ✓</span>}
+                </div>
+                <h3 className="mt-1 text-sm text-text">{title}</h3>
+
+                {block === 'later' && mobilityVariable && exercises[0]?.rpeScale === 'stretch' && (
+                  <div className="mt-2 rounded bg-surface-2 px-2 py-1.5 text-xs">
+                    <span className="text-muted">This week: </span>
+                    <span className="text-text">{mobilityVariable}</span>
+                  </div>
+                )}
+
+                <div className="mt-2 divide-y divide-line">
+                  {exercises.map((exercise) => (
+                    <ExerciseCard
+                      key={exercise.id}
+                      order={exercise.order}
+                      exercise={exercise}
+                      prescription={resolvePrescription(exercise, week)}
+                    />
+                  ))}
+                </div>
+
+                {block === 'later' && exercises[0]?.rpeScale === 'stretch' && (
+                  <details className="mt-2 text-xs text-muted">
+                    <summary>Don't progress if…</summary>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                      {doNotProgressConditions.map((condition) => (
+                        <li key={condition}>{condition}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => handleStart(block)}
+                  className="mt-3 min-h-11 w-full rounded bg-good text-base font-medium text-bg"
+                >
+                  {inProgress ? 'Resume session' : `Start ${BLOCK_LABEL[block].toLowerCase()}`}
+                </button>
+              </Card>
+            );
+          })
         )}
 
         <Card className="mt-4">

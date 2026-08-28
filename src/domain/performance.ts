@@ -15,11 +15,11 @@ import type { Exercise, SessionLog, SetLog } from './types';
 /** Fractional improvement below which two bests count as the same. SPEC.md 6.6. */
 export const FLAT_THRESHOLD = 1.03;
 
-export type BestKind = 'reps' | 'seconds' | 'weightedReps' | 'distance';
+export type BestKind = 'reps' | 'seconds' | 'minutes' | 'weightedReps' | 'distance' | 'carry';
 
 export interface Best {
   kind: BestKind;
-  /** Reps, seconds, or metres — whatever the movement is actually measured in. */
+  /** Reps, seconds, minutes or metres — whatever the movement is measured in. */
   value: number;
   addedKg?: number;
   romCm?: number;
@@ -40,7 +40,13 @@ export function bestKindFor(metric: Exercise['metric']): BestKind {
       return 'weightedReps';
     case 'sprint':
       return 'distance';
+    case 'runInterval':
+      return 'minutes';
+    case 'carry':
+      return 'carry';
     case 'reps':
+    // The pre-v4 easy run stored its minutes in `reps`. Left alone so retired
+    // records keep reading the way they were written.
     case 'distanceTime':
       return 'reps';
   }
@@ -55,7 +61,13 @@ export function setValue(metric: Exercise['metric'], set: SetLog): number | unde
   switch (bestKindFor(metric)) {
     case 'seconds':
       return set.attempts?.length ? Math.max(...set.attempts) : set.seconds;
+    case 'minutes':
+      return set.minutes;
     case 'distance':
+    // A carry's prescribed distance is fixed, so it is the LOAD that moves —
+    // but distance is still the raw number, and compareBests reads addedKg
+    // first for this kind.
+    case 'carry':
       return set.distanceM;
     case 'reps':
     case 'weightedReps':
@@ -100,13 +112,17 @@ export function buildPlainHistory(
  *
  * For weighted movements LOAD is the primary axis and reps the tiebreak —
  * 1 rep at +25 kg beats 8 reps at +20 kg, which is how a weighted movement
- * actually progresses. For everything else the raw value leads.
+ * actually progresses. Loaded carries work the same way: the metres are
+ * prescribed and fixed, so a heavier 30 m is the better carry. For everything
+ * else the raw value leads.
  *
  * `romCm` breaks a final tie, and is the one comparison that INVERTS: lower
  * pad height means deeper, means better.
  */
+const LOAD_LED_KINDS = new Set<BestKind>(['weightedReps', 'carry']);
+
 export function compareBests(a: Best, b: Best): number {
-  if (a.kind === 'weightedReps' || b.kind === 'weightedReps') {
+  if (LOAD_LED_KINDS.has(a.kind) || LOAD_LED_KINDS.has(b.kind)) {
     const loadDiff = (b.addedKg ?? 0) - (a.addedKg ?? 0);
     if (loadDiff !== 0) return loadDiff;
   }
@@ -237,15 +253,19 @@ export function trendArrow(t: Trend | null): string {
   return t ? TREND_ARROW[t] : '';
 }
 
-/** e.g. "8 reps", "12 s", "6 reps @ +10 kg", "6 reps · 15 cm". Always kg — display units convert at the call site. */
+const BEST_UNIT: Record<BestKind, string> = {
+  reps: 'reps',
+  seconds: 's',
+  minutes: 'min',
+  weightedReps: 'reps',
+  distance: 'm',
+  carry: 'm',
+};
+
+/** e.g. "8 reps", "12 s", "15 min", "6 reps @ +10 kg", "30 m @ +24 kg", "6 reps · 15 cm". Always kg — display units convert at the call site. */
 export function formatBest(best: Best | null): string {
   if (!best) return '—';
-  const head =
-    best.kind === 'seconds'
-      ? `${best.value} s`
-      : best.kind === 'distance'
-        ? `${best.value} m`
-        : `${best.value} reps`;
+  const head = `${best.value} ${BEST_UNIT[best.kind]}`;
   const load = best.addedKg ? ` @ +${best.addedKg} kg` : '';
   const rom = best.romCm !== undefined ? ` · ${best.romCm} cm` : '';
   return `${head}${load}${rom}`;

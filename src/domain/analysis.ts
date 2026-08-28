@@ -1,6 +1,8 @@
 // Stop-rule check, stagnation detector, one-variable rule, tendon guardrails —
 // SPEC.md sections 6.6–6.8, 6.11.
-import { bestQualifyingScore, exerciseRollingBestRaw } from './scoring';
+import { setValue } from './performance';
+import { weekRpeCap } from './phase';
+import { bestQualifyingScore } from './scoring';
 import type { DatedSetScore } from './scoring';
 import type { Exercise, Ladder, Phase, ProgressionEvent, Readiness, SessionLog, SetLog, TechniqueFlag } from './types';
 
@@ -15,19 +17,17 @@ export interface SkillDefinition {
   ladderId?: string;
 }
 
+// v4.0: five headline skills, one per objective in SPEC-V4.0.md section 9.
+// Pistol is gone from the block entirely; the long run joins because a marathon
+// block whose headline numbers never mention running is lying about itself.
+// Each must point at something still PRESCRIBED, or it can never gain a data point.
 export const SKILLS: SkillDefinition[] = [
-  { id: 'frontLever', label: 'Front lever', exerciseId: 'fl-hard-iso', ladderId: 'frontLever' },
-  // v3.0: was `hs-balance-primary` on the handstandEntry ladder. That exercise
-  // is retired (SPEC-V3.0.md section 3), and a headline skill must point at
-  // something still prescribed or it can never gain a new data point. Monday's
-  // new slot 1 is the natural successor: same day, same slot, same skill, and
-  // it sits on the hspu ladder that the label already named.
-  { id: 'hspu', label: 'HSPU/handstand', exerciseId: 'wall-hspu-partial', ladderId: 'hspu' },
-  { id: 'pistol', label: 'Pistol', exerciseId: 'pistol', ladderId: 'pistol' },
-  { id: 'pullup', label: 'Pull-up', exerciseId: 'ring-pullup' },
+  { id: 'frontLever', label: 'Front lever', exerciseId: 'fl-hold-primary', ladderId: 'frontLever' },
+  { id: 'hspu', label: 'HSPU', exerciseId: 'hspu-primary', ladderId: 'hspu' },
+  { id: 'pullup', label: 'Weighted pull-up', exerciseId: 'ring-pullup' },
+  { id: 'dip', label: 'Weighted ring dip', exerciseId: 'ring-dip' },
+  { id: 'longRun', label: 'Long run', exerciseId: 'sun-long-run' },
 ];
-
-const TEST_LIFT_IDS = new Set(SKILLS.map((s) => s.exerciseId));
 
 // ---------------------------------------------------------------------------
 // 6.6 — Stop-rule check (live, during the session)
@@ -39,30 +39,10 @@ export interface StopRuleResult {
   message: string;
 }
 
-/**
- * Phase RPE caps (SPEC.md 6.6). "Accumulation 9 (accessories only)" can't be
- * distinguished from skill lifts — program.ts carries no accessory/skill
- * marker — so the cap is applied uniformly across accumulation. Test week is
- * uncapped only for the four test lifts (SKILLS above), capped 7 otherwise.
- */
-export function phaseRpeCap(phase: Phase, exerciseId: string): number {
-  switch (phase) {
-    case 'calibration':
-      return 7.5;
-    case 'accumulation':
-      return 9;
-    case 'deload':
-      return 6;
-    case 'intensification':
-      return 8.5;
-    case 'peak':
-      return 8.5;
-    case 'taper':
-      return 7.5;
-    case 'test':
-      return TEST_LIFT_IDS.has(exerciseId) ? Infinity : 7;
-  }
-}
+// The RPE ceiling now lives in phase.ts as weekRpeCap(week) — it is read
+// directly off SPEC-V4.0.md's own weekly tables rather than inferred from a
+// phase name, and v4.0 has no test week to exempt lifts from.
+
 
 const FLAG_LABEL: Record<TechniqueFlag, string> = {
   hipsSagged: 'Hips sagged',
@@ -99,14 +79,18 @@ export interface StopRuleContext {
   set: SetLog;
   /** The set logged immediately before it in this session (for consecutive-collapse detection). */
   previousSetThisExercise: SetLog | undefined;
-  /** Best qualifying raw reps/seconds for this exercise across its last 3 prior sessions. */
-  rollingBestRaw: number | null;
+  /**
+   * The FIRST working set of this exercise in this session — the baseline
+   * SPEC-V4.0.md section 7's Performance Drop Rule measures against. Undefined
+   * when the set being checked is itself the first.
+   */
+  firstSetThisSession: SetLog | undefined;
   week: number;
-  phase: Phase;
 }
 
 export function checkStopRule(ctx: StopRuleContext): StopRuleResult | null {
-  const { exercise, set, previousSetThisExercise, rollingBestRaw, week, phase } = ctx;
+  const { exercise, set, previousSetThisExercise, firstSetThisSession, week } = ctx;
+  const scale = exercise.rpeScale ?? 'strength';
 
   if (
     exercise.metric === 'attempts' &&
@@ -116,12 +100,19 @@ export function checkStopRule(ctx: StopRuleContext): StopRuleResult | null {
     return { severity: 'red', message: 'Two collapses. Stop balance work today.' };
   }
 
-  const raw =
-    exercise.metric === 'hold' || exercise.metric === 'attempts' || exercise.metric === 'timeOnly'
-      ? set.seconds
-      : set.reps;
-  if (rollingBestRaw !== null && rollingBestRaw > 0 && raw !== undefined && raw <= rollingBestRaw * 0.85) {
-    return { severity: 'amber', message: 'Quality drop. Plan says end this exercise.' };
+  // v4.0 Performance Drop Rule (SPEC-V4.0.md section 7). Measured WITHIN the
+  // session against its own first working set, not against a rolling best from
+  // previous weeks. The plan's point is that a session which decays by >15%
+  // from where it started has already given you its useful work — that is a
+  // fact about today, and comparing today's third set to a PR set three weeks
+  // ago answered a different question.
+  const value = setValue(exercise.metric, set);
+  const baseline = firstSetThisSession ? setValue(exercise.metric, firstSetThisSession) : undefined;
+  if (baseline !== undefined && baseline > 0 && value !== undefined && value < baseline * 0.85) {
+    return {
+      severity: 'amber',
+      message: 'Down more than 15% from your first set. Remove the last set, reduce load, or regress the skill.',
+    };
   }
 
   if (set.techniqueFlags.length > 0) {
@@ -129,14 +120,19 @@ export function checkStopRule(ctx: StopRuleContext): StopRuleResult | null {
     return { severity: 'amber', message: `${FLAG_LABEL[flag]}. ${quotedRule(exercise, flag)}` };
   }
 
-  if (set.rpe === 10 && week !== 10 && week !== 12) {
+  // The two rules below read the strength RPE table. A stretch held at RPE 7 or
+  // an easy run at RPE 2 mean something else entirely on their own scales
+  // (SPEC-V4.0.md section 1), so they are not judged here.
+  if (scale !== 'strength') return null;
+
+  if (set.rpe === 10) {
     return { severity: 'amber', message: "Failure adds fatigue you can't afford at this frequency." };
   }
 
-  if ((phase === 'deload' || phase === 'taper') && set.rpe !== undefined) {
-    const cap = phaseRpeCap(phase, exercise.id);
+  if (set.rpe !== undefined) {
+    const cap = weekRpeCap(week);
     if (set.rpe > cap) {
-      return { severity: 'amber', message: `Week ${week} caps at RPE ${cap}.` };
+      return { severity: 'amber', message: `Week ${week} prescribes nothing above RPE ${cap}.` };
     }
   }
 
@@ -167,9 +163,8 @@ export function weeklyStopRuleFirings(
           exercise,
           set: log.sets[i],
           previousSetThisExercise: i > 0 ? log.sets[i - 1] : undefined,
-          rollingBestRaw: exerciseRollingBestRaw(sessionLogs, exercise.id, exercise.metric, session.id),
+          firstSetThisSession: i > 0 ? log.sets[0] : undefined,
           week: session.week,
-          phase: session.phase,
         });
         if (result) firings.push({ exerciseId: exercise.id, result });
       }
@@ -187,23 +182,42 @@ export function weeklyStopRuleFirings(
  * Exercise in the data model, so inferred here from exercise id / ladder —
  * elbow-loaded pulling and lever work vs shoulder-loaded pressing work.
  */
+// Retired ids stay in these sets: joint-volume warnings read historical logs,
+// and a session logged under earlier programming still loaded the same joint.
+// v4.0 ids are added alongside the v1–v3 ones rather than replacing them.
 const ELBOW_EXERCISE_IDS = new Set([
+  // v4.0
+  'fl-hold-primary',
+  'fl-row-banded',
+  'fl-raise',
+  'ring-pullup',
+  'pullup-secondary',
+  'incline-curl',
+  'cable-curl',
+  'cable-triceps-ext',
+  'overhead-triceps-ext',
+  // v1–v3, retired
   'fl-hard-iso',
   'fl-row',
-  'fl-raise',
   'fl-secondary',
   'ring-curl',
-  'ring-pullup',
   'ring-row',
   'face-pull',
 ]);
-// Retired ids stay in this set: joint-volume warnings read historical logs, and
-// a Monday logged before v3.0 still loaded the same shoulders (SPEC-V3.0.md
-// section 3). The two v3.0 replacements are added alongside them.
+
 const SHOULDER_EXERCISE_IDS = new Set([
+  // v4.0
+  'hspu-primary',
+  'hspu-secondary',
+  'wall-hspu-negative',
+  'ring-dip',
+  'ring-dip-secondary',
+  'incline-db-press',
+  'lateral-raise',
+  'lateral-raise-c',
+  // v1–v3, retired
   'pike-hspu',
   'press-to-hs',
-  'ring-dip',
   'planche-lean',
   'ring-pushup',
   'wall-hspu',
@@ -213,9 +227,50 @@ const SHOULDER_EXERCISE_IDS = new Set([
   'hs-balance-secondary',
 ]);
 
-function relevantJoint(exerciseId: string): 'elbow' | 'shoulder' | null {
+// v4.0: the joint a five-run week actually threatens. Calf/tibialis work sits
+// here alongside the runs because it loads the same tendon.
+const ACHILLES_EXERCISE_IDS = new Set([
+  'tue-run-warmup',
+  'tue-run-strides',
+  'tue-threshold',
+  'tue-run-cooldown',
+  'wed-recovery-run',
+  'thu-easy-run',
+  'sat-easy-run',
+  'sat-strides',
+  'sun-long-run',
+  'sun-long-run-finish',
+  'calf-raise-b',
+  'calf-raise-c',
+  'tibialis-raise',
+  // v1–v3, retired
+  'sprints',
+  'easy-run',
+  'optional-run',
+]);
+
+export type Joint = 'elbow' | 'shoulder' | 'achilles';
+
+/** The Readiness field that reports irritation in a given joint. */
+export function jointIrritation(joint: Joint, readiness: Readiness): number {
+  switch (joint) {
+    case 'elbow':
+      return readiness.elbowIrritation;
+    case 'shoulder':
+      return readiness.shoulderIrritation;
+    case 'achilles':
+      return readiness.achillesIrritation;
+  }
+}
+
+/**
+ * Which readiness input a given exercise's fatigue shows up in. Not encoded on
+ * Exercise in the data model, so resolved here from the exercise id.
+ */
+export function relevantJoint(exerciseId: string): Joint | null {
   if (ELBOW_EXERCISE_IDS.has(exerciseId)) return 'elbow';
   if (SHOULDER_EXERCISE_IDS.has(exerciseId)) return 'shoulder';
+  if (ACHILLES_EXERCISE_IDS.has(exerciseId)) return 'achilles';
   return null;
 }
 
@@ -243,8 +298,7 @@ export function isHealthy(input: HealthCheckInput): boolean {
   const last3 = input.recentReadiness.slice(0, 3);
   const soreOk = last3.every((r) => r.soreness <= 2);
   const joint = relevantJoint(input.exerciseId);
-  const jointOk =
-    joint === null || last3.every((r) => (joint === 'elbow' ? r.elbowIrritation : r.shoulderIrritation) <= 1);
+  const jointOk = joint === null || last3.every((r) => jointIrritation(joint, r) <= 1);
   const weightOk = input.daysWithLoggedWeightInLast7 >= 5;
   return soreOk && jointOk && weightOk;
 }
@@ -281,7 +335,7 @@ export function detectStagnation(params: {
     if (last3.length < 3) reasons.push('not enough recent readiness check-ins');
     if (last3.some((r) => r.soreness > 2)) reasons.push('soreness above target');
     const joint = relevantJoint(exercise.id);
-    if (joint && last3.some((r) => (joint === 'elbow' ? r.elbowIrritation : r.shoulderIrritation) > 1)) {
+    if (joint && last3.some((r) => jointIrritation(joint, r) > 1)) {
       reasons.push(`${joint} irritation above target`);
     }
     if (health.daysWithLoggedWeightInLast7 < 5) reasons.push('weight not logged consistently');

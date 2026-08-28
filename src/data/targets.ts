@@ -1,4 +1,8 @@
-// End-of-block targets — SPEC.md section 5.10. Rendered as a week-12 checklist.
+// End-of-block objectives — SPEC-V4.0.md section 9. Rendered as a week-12 checklist.
+//
+// Item ORDER is load-bearing: review.ts's checkEndOfBlockTargets matches on
+// `group.id` plus the item's index to decide which items it can auto-check.
+// Reordering an item silently moves its check onto a different claim.
 
 export interface TargetGroup {
   id: string;
@@ -9,54 +13,71 @@ export interface TargetGroup {
 export const targets: TargetGroup[] = [
   {
     id: 'body',
-    label: 'Body',
+    label: 'Body composition',
     items: [
-      '72–73 kg',
+      'at target weight', // auto: settings.targetWeightKg
+      'substantially leaner waist',
       'most muscle retained',
-      'clearly reduced waist',
-      'dip and pull-up performance broadly maintained',
+      'more visible abdominal definition',
     ],
   },
   {
     id: 'frontLever',
     label: 'Front lever',
     items: [
-      'open advanced tuck 10–15 clean s or one-leg 5–8 s/side or noticeably less band assistance on full shape',
-      'harder rows with correct hip height',
-      'slower, cleaner raises',
+      'stronger open advanced tuck or one-leg hold', // auto
+      'less band assistance on full-shape work',
+      'better front-lever row strength',
+      'better lever-raise control',
     ],
   },
   {
-    id: 'handstandHspu',
-    label: 'Handstand/HSPU',
+    id: 'hspu',
+    label: 'HSPU & handstand',
     items: [
-      'consistent 8–15 s freestanding balances',
-      '2 s stable lockout after the press',
-      '8–10 elevated pike HSPU at current setup or 4–6 at meaningfully greater ROM',
-      'first controlled full or near-full wall HSPU',
+      'more ROM or reps in the primary pike HSPU', // auto
+      'stronger wall-facing negatives',
+      'better handstand line',
+      'more consistent wall-release balance',
     ],
   },
   {
-    id: 'pistol',
-    label: 'Pistol',
+    id: 'strength',
+    label: 'Strength',
     items: [
-      '5–8 clean bodyweight reps/side or 3–5 weighted',
-      'improved symmetry',
-      'better bottom-position dorsiflexion',
+      'heavy weighted pull-ups maintained', // auto
+      'heavy weighted ring dips maintained', // auto
+      'major pressing and pulling strength retained',
     ],
   },
   {
-    id: 'mobility',
-    label: 'Mobility',
-    items: ['per §5.9 targets'],
+    id: 'core',
+    label: 'Core',
+    items: [
+      'stronger dragon flag', // auto
+      'harder standing rollout progression', // auto
+      'better windshield-wiper control', // auto
+      'better anti-lateral trunk strength',
+    ],
   },
   {
-    id: 'cardio',
-    label: 'Cardio',
+    id: 'flexibility',
+    label: 'Flexibility',
     items: [
-      'comfortable 50–55 min conversational run',
-      'faster, cleaner 20–30 m acceleration',
-      'no decline in pistol or sprint performance',
+      'measured progress across the six chains', // auto, week 1 -> week 12
+      'lower pancake position',
+      'meaningful progress toward middle and front splits',
+      'better overhead handstand shoulder line',
+    ],
+  },
+  {
+    id: 'marathon',
+    label: 'Marathon development',
+    items: [
+      'long run built to 2+ hours', // auto
+      'comfortable 5–6 run weekly schedule', // auto
+      'threshold work held at controlled RPE',
+      'strides maintained for speed and mechanics',
     ],
   },
 ];

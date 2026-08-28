@@ -7,13 +7,15 @@ import {
   currentWeek,
   dateForBlockDay,
   dayIdForDate,
+  exercisesFor,
   isBlockComplete,
   isWithinBlock,
   phaseForWeek,
   resolvePrescription,
+  waveForWeek,
+  weekRpeCap,
 } from '../phase';
-import { program } from '../../data/program';
-import type { DayId, Phase } from '../types';
+import type { Exercise, Phase } from '../types';
 
 describe('dayIdForDate', () => {
   it('maps calendar dates to the right DayId', () => {
@@ -24,20 +26,21 @@ describe('dayIdForDate', () => {
   });
 });
 
+// SPEC-V4.0.md section 3 — three four-week loading waves.
 describe('phaseForWeek', () => {
   const expected: Record<number, Phase> = {
-    1: 'calibration',
-    2: 'calibration',
-    3: 'accumulation',
-    4: 'accumulation',
-    5: 'accumulation',
-    6: 'deload',
-    7: 'intensification',
-    8: 'intensification',
-    9: 'intensification',
-    10: 'peak',
-    11: 'taper',
-    12: 'test',
+    1: 'baseline',
+    2: 'reinforce',
+    3: 'overload',
+    4: 'deload',
+    5: 'rebuild',
+    6: 'overload',
+    7: 'peak',
+    8: 'deload',
+    9: 'rebuild',
+    10: 'overload',
+    11: 'marathonPeak',
+    12: 'taper',
   };
 
   it('resolves all 12 weeks to the phase in the week→phase map', () => {
@@ -45,69 +48,88 @@ describe('phaseForWeek', () => {
       expect(phaseForWeek(week)).toBe(expected[week]);
     }
   });
-});
 
-describe('resolvePrescription over the seeded program', () => {
-  const trackedExercises = program.filter((e) => e.tracked);
+  it('deloads land at the end of each of the first two waves', () => {
+    expect(phaseForWeek(4)).toBe('deload');
+    expect(phaseForWeek(8)).toBe('deload');
+  });
 
-  // optional-run is explicitly gated "from week 3 only" (SPEC.md section 5.7) —
-  // weeks 1–2 legitimately have no prescription, by design, not by transcription gap.
-  const knownGaps = new Set(['optional-run:1', 'optional-run:2']);
-
-  it('resolves a non-null prescription for every tracked exercise, every week (documented gaps excepted)', () => {
-    const failures: string[] = [];
-
-    for (const exercise of trackedExercises) {
-      for (let week = 1; week <= 12; week++) {
-        const prescription = resolvePrescription(exercise, week);
-        if (!prescription && !knownGaps.has(`${exercise.id}:${week}`)) {
-          failures.push(`${exercise.id} (week ${week})`);
-        }
-      }
-    }
-
-    if (failures.length > 0) {
-      console.log('Exercises that failed to resolve a prescription:', failures);
-    }
-    expect(failures).toEqual([]);
+  it('clamps rather than returning undefined outside 1..12', () => {
+    expect(phaseForWeek(0)).toBe('baseline');
+    expect(phaseForWeek(99)).toBe('taper');
   });
 });
 
-describe('program totals', () => {
-  const trackedExercises = program.filter((e) => e.tracked);
-  const mainByDay = new Map<DayId, number>();
-  const amByDay = new Map<DayId, number>();
+describe('waveForWeek', () => {
+  it('splits the block into three four-week waves', () => {
+    expect([1, 2, 3, 4].map(waveForWeek)).toEqual([1, 1, 1, 1]);
+    expect([5, 6, 7, 8].map(waveForWeek)).toEqual([2, 2, 2, 2]);
+    expect([9, 10, 11, 12].map(waveForWeek)).toEqual([3, 3, 3, 3]);
+  });
+});
 
-  for (const exercise of program) {
-    const map = exercise.block === 'main' ? mainByDay : amByDay;
-    map.set(exercise.day, (map.get(exercise.day) ?? 0) + 1);
+describe('weekRpeCap', () => {
+  // Read off SPEC-V4.0.md's own weekly tables — the highest RPE the plan
+  // prescribes that week, not an invented ceiling.
+  it('matches the plan\'s maximum prescribed RPE per week', () => {
+    const expected = [8, 8.5, 9, 7, 8.5, 9, 9, 7, 8.5, 9, 8.5, 7.5];
+    for (let week = 1; week <= 12; week++) {
+      expect(weekRpeCap(week)).toBe(expected[week - 1]);
+    }
+  });
+
+  it('drops to 7 in both deload weeks', () => {
+    expect(weekRpeCap(4)).toBe(7);
+    expect(weekRpeCap(8)).toBe(7);
+  });
+});
+
+// Prescription resolution over the live program, the day/block map and the
+// per-week set counts are asserted in data/__tests__/program.test.ts, next to
+// the content they describe. What is left here is phase.ts's own behaviour.
+
+// SPEC-V4.0.md section 4: `sets: 0` is how a week opts an exercise out. It has
+// to be authored explicitly, because resolvePrescription's nearest-earlier
+// fallback would otherwise fill the gap with a neighbouring week's numbers.
+describe('exercisesFor and the sets: 0 opt-out', () => {
+  function ex(prescriptions: Exercise['prescriptions']): Exercise {
+    return {
+      id: 'recovery-run',
+      name: 'Recovery run',
+      day: 'wed',
+      block: 'later',
+      order: 1,
+      metric: 'runInterval',
+      tracked: true,
+      cues: [],
+      progressionLadder: [],
+      stopRules: [],
+      prescriptions,
+    };
   }
 
-  it('has an AM session on all 7 days', () => {
-    expect(amByDay.size).toBe(7);
+  const recoveryRun = ex([
+    { weeks: [1, 2], sets: 0 },
+    { weeks: [3], sets: 2, minutesEach: 10 },
+    { weeks: [4], sets: 0 },
+    { weeks: [5], sets: 2, minutesEach: 10 },
+  ]);
+
+  it('drops an exercise in the weeks it is prescribed zero sets', () => {
+    expect(exercisesFor([recoveryRun], 'wed', 'later', 1)).toEqual([]);
+    expect(exercisesFor([recoveryRun], 'wed', 'later', 2)).toEqual([]);
+    expect(exercisesFor([recoveryRun], 'wed', 'later', 4)).toEqual([]);
   });
 
-  it('has a full multi-exercise main session on exactly 5 days (Mon, Tue, Wed, Fri, Sat)', () => {
-    const fullMainDays = [...mainByDay.entries()]
-      .filter(([, count]) => count > 1)
-      .map(([day]) => day)
-      .sort();
-    expect(fullMainDays).toEqual(['fri', 'mon', 'sat', 'tue', 'wed']);
+  it('includes it in the weeks it has volume', () => {
+    expect(exercisesFor([recoveryRun], 'wed', 'later', 3)).toHaveLength(1);
+    expect(exercisesFor([recoveryRun], 'wed', 'later', 5)).toHaveLength(1);
   });
 
-  it('prints and asserts the total tracked-exercise count for hand verification (SPEC.md section 11.3)', () => {
-    const ids = trackedExercises.map((e) => e.id).sort();
-    console.log(`Tracked exercises (${ids.length}):`, ids);
-    // v1.0 baseline: SPEC.md's own prompt pack (section 11.2, Prompt 2) states
-    // 30; careful transcription of section 5 as written yields 29 (main-only
-    // tracked exercises, since AM was tracked: false except two attempts
-    // exercises) -- that 29-vs-30 discrepancy is recorded in SPEC-V1.1.md
-    // section 1's amendment table and stands unresolved as a v1.0 spec note.
-    //
-    // v1.1: every AM exercise is now tracked: true (SPEC-V1.1.md section 2),
-    // so the count is all 68 program entries (41 AM + 27 main), not just the
-    // 29 previously-tracked main + 2 AM exceptions.
-    expect(ids.length).toBe(68);
+  it('stops the nearest-earlier fallback leaking week 3 into week 4', () => {
+    // Without the explicit `weeks: [4], sets: 0` entry, week 4 would resolve
+    // back to week 3's two blocks.
+    expect(resolvePrescription(recoveryRun, 4)?.sets).toBe(0);
   });
 });
 

@@ -6,8 +6,8 @@
 import { addDays, format, parseISO, startOfWeek, subDays } from 'date-fns';
 import { program } from '../data/program';
 import { ladders } from '../data/ladders';
-import { benchmarks } from '../data/mobility';
-import { resolvePrescription } from '../domain/phase';
+import { BENCHMARK_WEEKS, benchmarks } from '../data/mobility';
+import { exercisesFor, phaseForWeek, resolvePrescription } from '../domain/phase';
 import { newId } from '../domain/id';
 import type { PersistedState } from '../store/persist';
 import { defaultSettings } from '../store/persist';
@@ -21,13 +21,16 @@ import type {
   TechniqueFlag,
 } from '../domain/types';
 
-const DEMO_WEEKS = 6;
+// v4.0: eight weeks rather than six, so the demo spans two complete loading
+// waves — it now contains both deloads (4, 8) and both of the benchmark weeks
+// the flexibility chart needs a delta between (1, 8).
+const DEMO_WEEKS = 8;
 const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 // Deliberately kept flat across weeks 4-6 so the stagnation detector fires on
-// it — it's a SKILLS exercise (HSPU/handstand), so it also shows up as a flat
-// bar on the Progress screen's skill headline sparkline.
-const STAGNANT_EXERCISE_ID = 'wall-hspu-partial';
+// it — it's a SKILLS exercise (HSPU), so it also shows up as a flat bar on the
+// Progress screen's skill headline sparkline.
+const STAGNANT_EXERCISE_ID = 'hspu-primary';
 
 // Tiny deterministic PRNG (mulberry32) — reproducible "plausible" noise.
 function mulberry32(seed: number) {
@@ -57,6 +60,7 @@ function weekFactor(week: number, exerciseId: string): number {
 interface DemoBase {
   reps?: number;
   seconds?: number;
+  minutes?: number;
   addedKg?: number;
   distanceM?: number;
   intensityPct?: number;
@@ -72,6 +76,12 @@ function baseValueFor(exercise: Exercise): DemoBase {
       return { seconds: 12 };
     case 'attempts':
       return { seconds: 6 };
+    case 'runInterval':
+      // Duration is prescribed, so it does not grow — a demo long run should
+      // show the block getting longer via SET COUNT, exactly as the plan does.
+      return { minutes: 10, distanceM: 1900 };
+    case 'carry':
+      return { distanceM: 30, addedKg: 20 };
     case 'sprint':
       return { distanceM: 30, intensityPct: 88 };
     case 'distanceTime':
@@ -109,6 +119,7 @@ function healthyReadiness(week: number, dayIndex: number): Readiness {
     soreness: soreness as 0 | 1,
     elbowIrritation: (dayIndex % 6 === 0 ? 1 : 0) as 0 | 1,
     shoulderIrritation: shoulderIrritation as 0 | 1,
+    achillesIrritation: (dayIndex % 7 === 0 ? 1 : 0) as 0 | 1,
     motivation: (2 + (dayIndex % 3 === 0 ? 1 : 0)) as 2 | 3,
   };
 }
@@ -123,7 +134,13 @@ function buildSet(exercise: Exercise, week: number, setIndex: number, flagThisSe
   const reps = base.reps !== undefined ? Math.max(1, Math.round(base.reps * factor)) : undefined;
   const seconds = base.seconds !== undefined ? Math.max(1, Math.round(base.seconds * factor)) : undefined;
   const addedKg = base.addedKg !== undefined ? round(base.addedKg * factor, 0.5) : undefined;
-  const distanceM = base.distanceM !== undefined ? Math.round(base.distanceM) : undefined;
+  // A run block's minutes are prescribed and fixed; the demo's improvement
+  // shows up as covering more ground in the same time.
+  const minutes = base.minutes;
+  const distanceM =
+    base.distanceM !== undefined
+      ? Math.round(exercise.metric === 'runInterval' ? base.distanceM * factor : base.distanceM)
+      : undefined;
   const intensityPct =
     base.intensityPct !== undefined ? Math.min(98, Math.round(base.intensityPct + (factor - 1) * 30)) : undefined;
 
@@ -144,11 +161,22 @@ function buildSet(exercise: Exercise, week: number, setIndex: number, flagThisSe
     if (reps !== undefined) set.reps = reps;
     if (seconds !== undefined) set.seconds = seconds;
   }
+  if (minutes !== undefined) set.minutes = minutes;
   if (addedKg !== undefined) set.addedKg = addedKg;
   if (distanceM !== undefined) set.distanceM = distanceM;
   if (intensityPct !== undefined) set.intensityPct = intensityPct;
-  if (exercise.metric === 'reps' || exercise.metric === 'weightedReps') {
-    set.rpe = Math.min(9, round(6.5 + (week - 1) * 0.35, 0.5));
+  switch (exercise.rpeScale ?? 'strength') {
+    case 'run':
+      set.rpe = 3;
+      break;
+    case 'stretch':
+      set.rpe = 6.5;
+      break;
+    case 'strength':
+      if (exercise.metric === 'reps' || exercise.metric === 'weightedReps' || exercise.metric === 'carry') {
+        set.rpe = Math.min(9, round(6.5 + (week - 1) * 0.35, 0.5));
+      }
+      break;
   }
   return set;
 }
@@ -188,9 +216,7 @@ export function generateDemoState(): PersistedState {
       const fatG = Math.round((remaining * 0.4) / 9);
       dailyEntries[date] = { date, weightKg, proteinG, carbsG, fatG, calories, updatedAt: makeUpdatedAt(date) };
 
-      const dayExercises = program.filter((e) => e.day === dayId);
-      const amExercises = dayExercises.filter((e) => e.block === 'am');
-      const mainExercises = dayExercises.filter((e) => e.block === 'main');
+      const amExercises = exercisesFor(program, dayId, 'am', week);
 
       // --- AM block: mark every AM item complete (feeds the consistency heatmap) ---
       if (amExercises.length > 0) {
@@ -198,7 +224,7 @@ export function generateDemoState(): PersistedState {
           id: `${date}:am`,
           date,
           week,
-          phase: 'calibration',
+          phase: phaseForWeek(week),
           day: dayId,
           block: 'am',
           startedAt: `${date}T07:00:00.000Z`,
@@ -208,10 +234,13 @@ export function generateDemoState(): PersistedState {
         };
       }
 
-      // --- main block: realistic scored sets per resolved prescription ---
-      if (mainExercises.length > 0) {
+      // --- main and later blocks: realistic scored sets per resolved prescription ---
+      for (const block of ['main', 'later'] as const) {
+        const blockExercises = exercisesFor(program, dayId, block, week);
+        if (blockExercises.length === 0) continue;
+
         const readiness = healthyReadiness(week, globalDayIndex);
-        const exerciseLogs = mainExercises
+        const exerciseLogs = blockExercises
           .map((exercise) => {
             const prescription = resolvePrescription(exercise, week);
             if (!prescription) return null;
@@ -225,19 +254,20 @@ export function generateDemoState(): PersistedState {
           .filter((log): log is { exerciseId: string; sets: SetLog[] } => log !== null);
 
         if (exerciseLogs.length > 0) {
-          sessionLogs[`${date}:main`] = {
-            id: `${date}:main`,
+          const startHour = block === 'main' ? 17 : 20;
+          sessionLogs[`${date}:${block}`] = {
+            id: `${date}:${block}`,
             date,
             week,
-            phase: week === 6 ? 'deload' : week <= 2 ? 'calibration' : 'accumulation',
+            phase: phaseForWeek(week),
             day: dayId,
-            block: 'main',
-            startedAt: `${date}T17:00:00.000Z`,
-            completedAt: `${date}T18:00:00.000Z`,
+            block,
+            startedAt: `${date}T${startHour}:00:00.000Z`,
+            completedAt: `${date}T${startHour + 1}:00:00.000Z`,
             readiness,
             sessionRpe: Math.min(9, round(6.5 + (week - 1) * 0.3, 0.5)),
             exercises: exerciseLogs,
-            updatedAt: makeUpdatedAt(date, 17),
+            updatedAt: makeUpdatedAt(date, startHour),
           };
         }
       }
@@ -248,39 +278,37 @@ export function generateDemoState(): PersistedState {
     {
       id: newId(),
       date: format(addDays(blockStart, 3), 'yyyy-MM-dd'),
-      exerciseId: 'fl-hard-iso',
-      axis: 'cleaner line',
-      from: 'tuck',
-      to: 'tuck (cleaner)',
+      exerciseId: 'fl-hold-primary',
+      axis: 'harder leverage',
+      from: 'advanced-tuck',
+      to: 'open-advanced-tuck',
       note: 'Demo data.',
     },
     {
       id: newId(),
       date: format(addDays(blockStart, 21), 'yyyy-MM-dd'),
-      exerciseId: 'pike-hspu',
-      axis: 'higher feet',
-      from: 'low box',
-      to: 'high box',
+      exerciseId: 'hspu-primary',
+      axis: 'greater foot elevation',
+      from: 'elevated-pike-low',
+      to: 'elevated-pike-high',
       note: 'Demo data.',
     },
   ];
 
-  const benchmarkEntriesArray = [
-    {
-      date: format(blockStart, 'yyyy-MM-dd'),
-      week: 1,
-      values: Object.fromEntries(benchmarks.map((b) => [b.id, b.direction === 'lower-better' ? 30 : 10])),
-      updatedAt: makeUpdatedAt(format(blockStart, 'yyyy-MM-dd')),
-    },
-    {
-      date: format(addDays(blockStart, 5 * 7), 'yyyy-MM-dd'),
-      week: 6,
+  // One entry per benchmark week the demo actually reaches, each a little
+  // better than the last in whichever direction the benchmark improves.
+  const benchmarkEntriesArray = BENCHMARK_WEEKS.filter((week) => week <= DEMO_WEEKS).map((week, index) => {
+    const date = format(addDays(blockStart, (week - 1) * 7), 'yyyy-MM-dd');
+    const improvement = index * 5;
+    return {
+      date,
+      week,
       values: Object.fromEntries(
-        benchmarks.map((b) => [b.id, b.direction === 'lower-better' ? 25 : 13]),
+        benchmarks.map((b) => [b.id, b.direction === 'lower-better' ? 30 - improvement : 10 + improvement]),
       ),
-      updatedAt: makeUpdatedAt(format(addDays(blockStart, 5 * 7), 'yyyy-MM-dd')),
-    },
-  ];
+      updatedAt: makeUpdatedAt(date),
+    };
+  });
   const benchmarkEntries = Object.fromEntries(benchmarkEntriesArray.map((b) => [String(b.week), b]));
 
   return {

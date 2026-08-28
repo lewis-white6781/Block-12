@@ -10,7 +10,6 @@ import {
   leverageJumpGuardrails,
   nextProgressionAxis,
   oneVariableWarning,
-  phaseRpeCap,
 } from '../analysis';
 import type { DatedSetScore } from '../scoring';
 import type { Exercise, Ladder, ProgressionEvent, Readiness, SessionLog, SetLog } from '../types';
@@ -37,47 +36,52 @@ function exercise(overrides: Partial<Exercise> = {}): Exercise {
 }
 
 function readiness(overrides: Partial<Readiness> = {}): Readiness {
-  return { sleepHours: 8, soreness: 0, elbowIrritation: 0, shoulderIrritation: 0, motivation: 3, ...overrides };
+  return {
+    sleepHours: 8,
+    soreness: 0,
+    elbowIrritation: 0,
+    shoulderIrritation: 0,
+    achillesIrritation: 0,
+    motivation: 3,
+    ...overrides,
+  };
 }
-
-describe('phaseRpeCap', () => {
-  it('matches the SPEC.md 6.6 table', () => {
-    expect(phaseRpeCap('calibration', 'x')).toBe(7.5);
-    expect(phaseRpeCap('accumulation', 'x')).toBe(9);
-    expect(phaseRpeCap('deload', 'x')).toBe(6);
-    expect(phaseRpeCap('intensification', 'x')).toBe(8.5);
-    expect(phaseRpeCap('peak', 'x')).toBe(8.5);
-    expect(phaseRpeCap('taper', 'x')).toBe(7.5);
-  });
-
-  it('test week is uncapped for the four test lifts, capped 7 otherwise', () => {
-    expect(phaseRpeCap('test', 'fl-hard-iso')).toBe(Infinity);
-    expect(phaseRpeCap('test', 'ring-pullup')).toBe(Infinity);
-    expect(phaseRpeCap('test', 'ring-dip')).toBe(7);
-  });
-});
 
 describe('checkStopRule', () => {
   const base = {
     exercise: exercise(),
     previousSetThisExercise: undefined,
-    rollingBestRaw: null,
-    week: 3,
-    phase: 'accumulation' as const,
+    firstSetThisSession: undefined,
+    week: 3, // overload, RPE cap 9
   };
 
   it('is silent with nothing to flag', () => {
     expect(checkStopRule({ ...base, set: set({ seconds: 6, rpe: 7 }) })).toBeNull();
   });
 
-  it('amber: reps/seconds >=15% below rolling best (acceptance test 11)', () => {
-    const result = checkStopRule({ ...base, rollingBestRaw: 10, set: set({ seconds: 8 }) }); // 20% drop
-    expect(result).toEqual({ severity: 'amber', message: 'Quality drop. Plan says end this exercise.' });
+  // SPEC-V4.0.md section 7's Performance Drop Rule: measured against this
+  // session's own first working set, not a rolling best from earlier weeks.
+  it('amber: >15% below the first set of this session', () => {
+    const result = checkStopRule({
+      ...base,
+      firstSetThisSession: set({ seconds: 10 }),
+      set: set({ seconds: 8 }), // 20% drop
+    });
+    expect(result?.severity).toBe('amber');
+    expect(result?.message).toContain('Down more than 15% from your first set');
   });
 
-  it('does not fire the quality-drop banner just under 15%', () => {
-    const result = checkStopRule({ ...base, rollingBestRaw: 10, set: set({ seconds: 9 }) }); // 10% drop
+  it('does not fire the drop rule just under 15%', () => {
+    const result = checkStopRule({
+      ...base,
+      firstSetThisSession: set({ seconds: 10 }),
+      set: set({ seconds: 9 }), // 10% drop
+    });
     expect(result).toBeNull();
+  });
+
+  it('cannot fire on the first set, which has no baseline to fall from', () => {
+    expect(checkStopRule({ ...base, set: set({ seconds: 4 }) })).toBeNull();
   });
 
   it('amber: any technique flag, quoting the exercise stop rule when it matches', () => {
@@ -88,7 +92,7 @@ describe('checkStopRule', () => {
   });
 
   it('red: two consecutive collapses on a handstand (attempts) exercise', () => {
-    const hs = exercise({ id: 'hs-balance-primary', metric: 'attempts' });
+    const hs = exercise({ id: 'fri-am-toe-pulls', metric: 'attempts' });
     const result = checkStopRule({
       ...base,
       exercise: hs,
@@ -99,29 +103,38 @@ describe('checkStopRule', () => {
   });
 
   it('a single collapse alone is amber, not red', () => {
-    const hs = exercise({ id: 'hs-balance-primary', metric: 'attempts' });
+    const hs = exercise({ id: 'fri-am-toe-pulls', metric: 'attempts' });
     const result = checkStopRule({ ...base, exercise: hs, set: set({ techniqueFlags: ['collapsed'] }) });
     expect(result?.severity).toBe('amber');
   });
 
-  it('amber: RPE 10 outside week 10/12', () => {
-    const result = checkStopRule({ ...base, week: 5, set: set({ seconds: 6, rpe: 10 }) });
-    expect(result?.message).toContain("fatigue you can't afford");
+  it('amber: RPE 10 in any week — v4.0 has no test week', () => {
+    expect(checkStopRule({ ...base, week: 5, set: set({ seconds: 6, rpe: 10 }) })?.message).toContain(
+      "fatigue you can't afford",
+    );
+    expect(checkStopRule({ ...base, week: 12, set: set({ seconds: 6, rpe: 10 }) })?.message).toContain(
+      "fatigue you can't afford",
+    );
   });
 
-  it('RPE 10 is silent in week 10 and week 12', () => {
-    expect(checkStopRule({ ...base, week: 10, set: set({ seconds: 6, rpe: 10 }) })).toBeNull();
-    expect(checkStopRule({ ...base, week: 12, set: set({ seconds: 6, rpe: 10 }) })).toBeNull();
+  it('amber: RPE above the week cap', () => {
+    // Week 4 is a deload; the plan prescribes nothing above RPE 7 that week.
+    const result = checkStopRule({ ...base, week: 4, set: set({ seconds: 6, rpe: 8 }) });
+    expect(result).toEqual({ severity: 'amber', message: 'Week 4 prescribes nothing above RPE 7.' });
   });
 
-  it('amber: deload/taper RPE over the phase cap', () => {
-    const result = checkStopRule({ ...base, phase: 'deload', week: 6, set: set({ seconds: 6, rpe: 7 }) });
-    expect(result).toEqual({ severity: 'amber', message: 'Week 6 caps at RPE 6.' });
+  it('allows the full prescribed range in an overload week', () => {
+    expect(checkStopRule({ ...base, week: 3, set: set({ seconds: 6, rpe: 9 }) })).toBeNull();
   });
 
-  it('does not apply the deload/taper cap check outside those phases', () => {
-    const result = checkStopRule({ ...base, phase: 'intensification', week: 8, set: set({ seconds: 6, rpe: 9 }) });
-    expect(result).toBeNull();
+  // The strength RPE table is the only one these two rules speak. A stretch at
+  // RPE 7 or an easy run at RPE 2 are different scales entirely.
+  it('ignores the RPE rules for stretch and run scales', () => {
+    const stretch = exercise({ rpeScale: 'stretch' });
+    expect(checkStopRule({ ...base, week: 4, exercise: stretch, set: set({ seconds: 45, rpe: 7 }) })).toBeNull();
+
+    const run = exercise({ metric: 'runInterval', rpeScale: 'run' });
+    expect(checkStopRule({ ...base, week: 4, exercise: run, set: set({ minutes: 10, rpe: 8 }) })).toBeNull();
   });
 });
 
@@ -210,7 +223,7 @@ describe('detectStagnation (acceptance tests 13-14)', () => {
         recentReadiness: [readiness(), readiness(), readiness()],
         daysWithLoggedWeightInLast7: 6,
       },
-      phase: 'accumulation',
+      phase: 'overload',
       progressionEvents: [
         { id: 'e1', date: '2026-01-10', exerciseId: 'pike-hspu', axis: 'cleaner line', from: 'a', to: 'b' },
       ],
@@ -229,7 +242,7 @@ describe('detectStagnation (acceptance tests 13-14)', () => {
         recentReadiness: [readiness({ soreness: 3 }), readiness(), readiness()],
         daysWithLoggedWeightInLast7: 6,
       },
-      phase: 'accumulation',
+      phase: 'overload',
       progressionEvents: [],
     });
     expect(result?.type).toBe('recovery');
@@ -267,7 +280,7 @@ describe('detectStagnation (acceptance tests 13-14)', () => {
         recentReadiness: [readiness(), readiness(), readiness()],
         daysWithLoggedWeightInLast7: 6,
       },
-      phase: 'accumulation',
+      phase: 'overload',
       progressionEvents: [],
     });
     expect(result).toBeNull();
@@ -345,7 +358,7 @@ describe('tendon guardrails (6.11)', () => {
         id: 's1',
         date: '2026-01-01',
         week: 3,
-        phase: 'accumulation',
+        phase: 'overload',
         day: 'tue',
         block: 'main',
         startedAt: '2026-01-01T08:00:00.000Z',

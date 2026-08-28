@@ -1,10 +1,13 @@
-// Autoregulation, joint-irritation volume warnings, optional-second-run gate —
-// SPEC.md sections 6.9 (gate), 6.10.
+// Autoregulation and joint-irritation volume warnings — SPEC.md section 6.10 as
+// amended by SPEC-V4.0.md section 7.
+//
+// v4.0 deleted SPEC.md 6.9's optional-second-run gate along with the sprint
+// session it keyed off. Running is no longer an earned extra: the plan
+// prescribes five to six runs a week outright, so there is nothing to gate.
 import { program } from '../data/program';
-import { fmt, fmtPct } from './format';
-import { plainScore } from './performance';
-import { exerciseSessionBest } from './scoring';
-import type { DayId, Readiness, SessionLog } from './types';
+import { relevantJoint } from './analysis';
+import type { Joint } from './analysis';
+import type { DayId, Readiness } from './types';
 
 // ---------------------------------------------------------------------------
 // 6.10 — Autoregulation
@@ -18,154 +21,75 @@ export function autoregulationAdjustment(readiness: Readiness): { rpeDelta: numb
   return null;
 }
 
-const ELBOW_VOLUME_EXERCISE_IDS = ['fl-hard-iso', 'fl-row', 'ring-curl'];
-const SHOULDER_VOLUME_EXERCISE_IDS = ['ring-dip', 'planche-lean', 'ring-pushup'];
-
 export interface JointVolumeWarning {
   message: string;
   suggestedExerciseIds: string[];
 }
 
 /**
- * `readiness.ts` only models one soreness axis per joint (no distinct
- * calf/Achilles field on `Readiness`) — elbow/shoulder irritation are used
- * directly per SPEC.md 6.10's own field names.
+ * Which of the current program's exercises load a given joint, and on which
+ * days.
+ *
+ * Derived from `program` rather than listed by hand. The pre-v4 code hardcoded
+ * "elbow days are Tuesday and Friday", which silently became wrong the moment
+ * the training split moved — the banner kept firing on the old days.
  */
-function twoConsecutiveAtOrAbove(recentReadiness: Readiness[], value: (r: Readiness) => number, threshold: number): boolean {
-  return recentReadiness.length >= 2 && recentReadiness.slice(0, 2).every((r) => value(r) >= threshold);
+function prescribedIdsForJoint(joint: Joint): string[] {
+  return program.filter((e) => relevantJoint(e.id) === joint).map((e) => e.id);
 }
+
+function isWarningDay(joint: Joint, day: DayId): boolean {
+  return program.some((e) => e.day === day && relevantJoint(e.id) === joint);
+}
+
+const JOINT_MESSAGE: Record<Joint, string> = {
+  elbow: 'Reduce lever, pull-up and curl volume this session.',
+  shoulder: 'Reduce pressing and dip volume this session.',
+  achilles: 'Calf and Achilles irritation is building. Cut a run block or drop the calf work today.',
+};
 
 /**
- * `recentReadiness` is this exercise day's session plus the one before it,
- * most-recent-first (i.e. the last two check-ins as of today).
+ * A joint-volume warning for `day`, or null.
+ *
+ * Fires when the last two check-ins both reported irritation of 2 or worse in
+ * the joint, and the day being viewed actually loads that joint — there is no
+ * point telling someone to cut pressing volume on a run day.
+ *
+ * `recentReadiness` is most-recent-first (the last two check-ins as of today).
  */
-export function elbowVolumeWarning(recentReadiness: Readiness[]): JointVolumeWarning | null {
-  if (!twoConsecutiveAtOrAbove(recentReadiness, (r) => r.elbowIrritation, 2)) return null;
-  return {
-    message: 'Reduce lever and curl volume this session.',
-    suggestedExerciseIds: ELBOW_VOLUME_EXERCISE_IDS,
-  };
-}
-
-export function shoulderVolumeWarning(recentReadiness: Readiness[]): JointVolumeWarning | null {
-  if (!twoConsecutiveAtOrAbove(recentReadiness, (r) => r.shoulderIrritation, 2)) return null;
-  return {
-    message: 'Reduce pressing volume this session.',
-    suggestedExerciseIds: SHOULDER_VOLUME_EXERCISE_IDS,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// 6.9 — Optional second run gate
-// ---------------------------------------------------------------------------
-
-export interface OptionalRunCondition {
-  id: string;
-  label: string;
-  met: boolean;
-  detail: string;
-}
-
-export interface OptionalRunGateResult {
-  eligible: boolean;
-  conditions: OptionalRunCondition[];
-}
-
-function sprintCondition(sessionLogs: Record<string, SessionLog>): OptionalRunCondition {
-  const label = 'Wednesday sprints within 5% of recent best';
-  const exercise = program.find((e) => e.id === 'sprints');
-  if (!exercise) return { id: 'sprint', label, met: false, detail: 'Sprint exercise not found.' };
-
-  const wedSessions = Object.values(sessionLogs)
-    .filter((s) => s.day === 'wed' && s.block === 'main' && s.exercises.some((e) => e.exerciseId === 'sprints'))
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
-  if (wedSessions.length === 0) {
-    return { id: 'sprint', label, met: false, detail: 'No Wednesday sprint session logged yet.' };
-  }
-
-  const scoreForSession = (s: SessionLog) =>
-    exerciseSessionBest(s, 'sprints', (set) => plainScore(exercise.metric, set));
-
-  const latest = wedSessions[wedSessions.length - 1];
-  const latestScore = scoreForSession(latest);
-  if (latestScore === null) {
-    return { id: 'sprint', label, met: false, detail: 'Latest Wednesday sprint session has no qualifying sets.' };
-  }
-
-  const priorScores = wedSessions
-    .slice(Math.max(0, wedSessions.length - 4), wedSessions.length - 1)
-    .map(scoreForSession)
-    .filter((v): v is number => v !== null);
-  if (priorScores.length === 0) {
-    return { id: 'sprint', label, met: false, detail: 'Not enough sprint history yet.' };
-  }
-
-  const priorBest = Math.max(...priorScores);
-  const met = priorBest > 0 && latestScore >= priorBest * 0.95;
-  return {
-    id: 'sprint',
-    label,
-    met,
-    detail: `Latest ${fmt(latestScore, 0)} vs recent best ${fmt(priorBest, 0)}.`,
-  };
-}
-
-function calfSorenessCondition(recentReadiness: Readiness[]): OptionalRunCondition {
-  const label = 'Calf/Achilles soreness ≤1, last two check-ins';
+export function jointVolumeWarning(
+  joint: Joint,
+  day: DayId,
+  recentReadiness: Readiness[],
+): JointVolumeWarning | null {
+  if (!isWarningDay(joint, day)) return null;
   const last2 = recentReadiness.slice(0, 2);
-  if (last2.length < 2) {
-    return { id: 'calf', label, met: false, detail: 'Not enough recent readiness check-ins.' };
-  }
-  const met = last2.every((r) => r.soreness <= 1);
-  return { id: 'calf', label, met, detail: `Soreness: ${last2.map((r) => r.soreness).join(', ')}.` };
+  if (last2.length < 2) return null;
+
+  const irritated = last2.every((r) => {
+    switch (joint) {
+      case 'elbow':
+        return r.elbowIrritation >= 2;
+      case 'shoulder':
+        return r.shoulderIrritation >= 2;
+      case 'achilles':
+        return r.achillesIrritation >= 2;
+    }
+  });
+  if (!irritated) return null;
+
+  return {
+    message: JOINT_MESSAGE[joint],
+    suggestedExerciseIds: prescribedIdsForJoint(joint).filter((id) =>
+      program.some((e) => e.id === id && e.day === day),
+    ),
+  };
 }
 
-function weeklyRateCondition(weeklyRatePct: number | null): OptionalRunCondition {
-  const label = '|Weekly weight-change rate| ≤0.6%';
-  if (weeklyRatePct === null) return { id: 'rate', label, met: false, detail: 'Not enough weight history yet.' };
-  const met = Math.abs(weeklyRatePct) <= 0.6;
-  return { id: 'rate', label, met, detail: `${fmtPct(weeklyRatePct)}/wk.` };
-}
-
-function sleepAndMotivationCondition(recentReadiness: Readiness[]): OptionalRunCondition {
-  const label = 'Mean sleep (last 3 nights) ≥7h and motivation ≥2';
-  const last3 = recentReadiness.slice(0, 3);
-  if (last3.length < 3) {
-    return { id: 'sleep', label, met: false, detail: 'Not enough recent readiness check-ins.' };
-  }
-  const meanSleep = last3.reduce((sum, r) => sum + r.sleepHours, 0) / last3.length;
-  const motivation = last3[0].motivation;
-  const met = meanSleep >= 7 && motivation >= 2;
-  return { id: 'sleep', label, met, detail: `Sleep ${fmt(meanSleep, 1)}h, motivation ${motivation}.` };
-}
-
-/**
- * All four conditions must hold, and only from week 3 onward (SPEC.md 6.9).
- * `recentReadiness` is main-session check-ins, most-recent-first.
- */
-export function optionalRunGate(params: {
-  week: number;
-  sessionLogs: Record<string, SessionLog>;
-  recentReadiness: Readiness[];
-  weeklyRatePct: number | null;
-}): OptionalRunGateResult {
-  const conditions = [
-    sprintCondition(params.sessionLogs),
-    calfSorenessCondition(params.recentReadiness),
-    weeklyRateCondition(params.weeklyRatePct),
-    sleepAndMotivationCondition(params.recentReadiness),
-  ];
-  const eligible = params.week >= 3 && conditions.every((c) => c.met);
-  return { eligible, conditions };
-}
-
-/** Elbow banner day: SPEC.md 6.10 names Tuesday/Friday (the lever/curl days). */
-export function isElbowWarningDay(day: DayId): boolean {
-  return day === 'tue' || day === 'fri';
-}
-
-/** Shoulder banner day: the pressing days that carry ring-dip/planche-lean/ring-pushup. */
-export function isShoulderWarningDay(day: DayId): boolean {
-  return day === 'mon' || day === 'sat';
+/** Every joint warning that applies to a given day, in a stable order. */
+export function jointVolumeWarnings(day: DayId, recentReadiness: Readiness[]): JointVolumeWarning[] {
+  const joints: Joint[] = ['elbow', 'shoulder', 'achilles'];
+  return joints
+    .map((joint) => jointVolumeWarning(joint, day, recentReadiness))
+    .filter((w): w is JointVolumeWarning => w !== null);
 }

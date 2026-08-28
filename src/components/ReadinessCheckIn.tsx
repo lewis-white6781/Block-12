@@ -14,6 +14,9 @@ export default function ReadinessCheckIn({ onSubmit, onCancel }: ReadinessCheckI
   const [soreness, setSoreness] = useState<0 | 1 | 2 | 3>(0);
   const [elbowIrritation, setElbowIrritation] = useState<0 | 1 | 2 | 3>(0);
   const [shoulderIrritation, setShoulderIrritation] = useState<0 | 1 | 2 | 3>(0);
+  // v4.0: SPEC-V4.0.md section 7 names Achilles in the joint/tendon rule, and
+  // it is what a 5-run week actually threatens.
+  const [achillesIrritation, setAchillesIrritation] = useState<0 | 1 | 2 | 3>(0);
   const [motivation, setMotivation] = useState<0 | 1 | 2 | 3>(2);
 
   return (
@@ -36,6 +39,7 @@ export default function ReadinessCheckIn({ onSubmit, onCancel }: ReadinessCheckI
       <ScaleField label="Soreness" value={soreness} onChange={setSoreness} />
       <ScaleField label="Elbow irritation" value={elbowIrritation} onChange={setElbowIrritation} />
       <ScaleField label="Shoulder irritation" value={shoulderIrritation} onChange={setShoulderIrritation} />
+      <ScaleField label="Calf / Achilles irritation" value={achillesIrritation} onChange={setAchillesIrritation} />
       <ScaleField label="Motivation" value={motivation} onChange={setMotivation} />
 
       <div className="mt-auto flex gap-2 pt-6">
@@ -49,7 +53,14 @@ export default function ReadinessCheckIn({ onSubmit, onCancel }: ReadinessCheckI
         <button
           type="button"
           onClick={() =>
-            onSubmit({ sleepHours, soreness, elbowIrritation, shoulderIrritation, motivation })
+            onSubmit({
+              sleepHours,
+              soreness,
+              elbowIrritation,
+              shoulderIrritation,
+              achillesIrritation,
+              motivation,
+            })
           }
           className="min-h-11 flex-1 rounded bg-good text-bg"
         >

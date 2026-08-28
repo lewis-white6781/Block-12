@@ -20,7 +20,7 @@ function session(overrides: Partial<SessionLog> = {}): SessionLog {
     id: 'id',
     date: '2026-01-01',
     week: 1,
-    phase: 'calibration',
+    phase: 'baseline',
     day: 'mon',
     block: 'main',
     startedAt: '2026-01-01T08:00:00.000Z',

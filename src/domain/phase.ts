@@ -55,14 +55,51 @@ export function isWithinBlock(index: number): boolean {
   return index >= 0 && index < BLOCK_DAYS;
 }
 
+// ---------------------------------------------------------------------------
+// Loading waves — SPEC-V4.0.md section 3.
+//
+// Three four-week waves, each ending in a lighter week. The old model was one
+// arc across the block with a single deload at week 6; this one deloads at 4, 8
+// and 12, which is what keeps gym fatigue survivable while running volume
+// climbs. Both tables are indexed by week, not derived from arithmetic, because
+// the waves are not uniform — week 11 drops gym volume while peaking the long
+// run, and week 12 reduces fatigue rather than testing.
+// ---------------------------------------------------------------------------
+
+const PHASE_BY_WEEK: Phase[] = [
+  'baseline', // 1
+  'reinforce', // 2
+  'overload', // 3
+  'deload', // 4
+  'rebuild', // 5
+  'overload', // 6
+  'peak', // 7
+  'deload', // 8
+  'rebuild', // 9
+  'overload', // 10
+  'marathonPeak', // 11
+  'taper', // 12
+];
+
 export function phaseForWeek(week: number): Phase {
-  if (week <= 2) return 'calibration';
-  if (week <= 5) return 'accumulation';
-  if (week === 6) return 'deload';
-  if (week <= 9) return 'intensification';
-  if (week === 10) return 'peak';
-  if (week === 11) return 'taper';
-  return 'test';
+  return PHASE_BY_WEEK[Math.min(12, Math.max(1, week)) - 1];
+}
+
+export type Wave = 1 | 2 | 3;
+
+/** Which of the three loading waves a week belongs to. */
+export function waveForWeek(week: number): Wave {
+  const clamped = Math.min(12, Math.max(1, week));
+  return (Math.floor((clamped - 1) / 4) + 1) as Wave;
+}
+
+// The highest RPE the plan itself prescribes in each week — read off the
+// SPEC-V4.0.md tables, not invented. Used as the stop-rule ceiling, so a set
+// logged above it means the session drifted off plan.
+const RPE_CAP_BY_WEEK = [8, 8.5, 9, 7, 8.5, 9, 9, 7, 8.5, 9, 8.5, 7.5];
+
+export function weekRpeCap(week: number): number {
+  return RPE_CAP_BY_WEEK[Math.min(12, Math.max(1, week)) - 1];
 }
 
 /**
@@ -87,12 +124,20 @@ export function resolvePrescription(exercise: Exercise, week: number): Prescript
 
 /**
  * Exercises for a given day and block, in display order, restricted to those
- * that resolve a prescription for the given week. Shared by Today and
- * SessionRunner, which both need the same day -> session pipeline.
+ * actually prescribed in the given week.
+ *
+ * "Prescribed" means a prescription resolves AND it asks for at least one set.
+ * `sets: 0` is a deliberate opt-out (SPEC-V4.0.md section 4): the Wednesday
+ * recovery run has no volume in weeks 1, 2 and 4, and the Sunday long-run
+ * finish only exists in weeks 9–11. Authoring those weeks explicitly as zero is
+ * what stops the nearest-earlier fallback above from carrying a neighbouring
+ * week's numbers into them.
+ *
+ * Shared by Today and SessionRunner, which need the same day -> session pipeline.
  */
 export function exercisesFor(program: Exercise[], dayId: DayId, block: Block, week: number): Exercise[] {
   return program
     .filter((e) => e.day === dayId && e.block === block)
-    .filter((e) => resolvePrescription(e, week) !== null)
+    .filter((e) => (resolvePrescription(e, week)?.sets ?? 0) > 0)
     .sort((a, b) => a.order - b.order);
 }

@@ -28,7 +28,9 @@ const UNIT_LABEL: Record<ReturnType<typeof bestKindFor>, string> = {
   reps: 'reps',
   weightedReps: 'reps',
   seconds: 's',
+  minutes: 'min',
   distance: 'm',
+  carry: 'm',
 };
 
 interface WeekPoint {

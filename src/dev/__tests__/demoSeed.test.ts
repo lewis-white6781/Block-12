@@ -13,17 +13,19 @@ import { buildWeeklyReview } from '../../domain/review';
 describe('generateDemoState', () => {
   const state = generateDemoState();
 
-  it('produces 6 weeks of main + AM sessions and daily entries', () => {
-    const mainSessions = Object.values(state.sessionLogs).filter((s) => s.block === 'main');
-    const amSessions = Object.values(state.sessionLogs).filter((s) => s.block === 'am');
-    expect(mainSessions.length).toBeGreaterThan(0);
-    expect(amSessions.length).toBeGreaterThan(0);
-    expect(Object.keys(state.dailyEntries).length).toBe(42);
+  it('produces 8 weeks of sessions across all three blocks, and daily entries', () => {
+    for (const block of ['main', 'am', 'later'] as const) {
+      expect(
+        Object.values(state.sessionLogs).filter((s) => s.block === block).length,
+        block,
+      ).toBeGreaterThan(0);
+    }
+    expect(Object.keys(state.dailyEntries).length).toBe(56);
   });
 
   it('fires the stagnation detector for the deliberately flat exercise', () => {
-    // Week 6 is deload, where the stagnation detector is intentionally
-    // suppressed (SPEC.md 6.7) — check the last accumulation week instead.
+    // Weeks 4 and 8 are deloads, where the stagnation detector is intentionally
+    // suppressed (SPEC.md 6.7) — check a loading week instead.
     const week = 5;
     const review = buildWeeklyReview({
       week,
@@ -35,7 +37,7 @@ describe('generateDemoState', () => {
       progressionEvents: state.progressionEvents,
       mobilityVariableForWeek: (w) => weeklyProgressionVariables.find((v) => v.week === w)?.description ?? null,
     });
-    const stagnant = review.firedFlags.stagnation.find((s) => s.exerciseId === 'wall-hspu-partial');
+    const stagnant = review.firedFlags.stagnation.find((s) => s.exerciseId === 'hspu-primary');
     expect(stagnant).toBeDefined();
     expect(stagnant?.type).toBe('stagnant');
   });
@@ -50,7 +52,7 @@ describe('generateDemoState', () => {
   });
 
   it('shows an improving best for a non-stagnant skill exercise', () => {
-    const exercise = program.find((e) => e.id === 'fl-hard-iso')!;
+    const exercise = program.find((e) => e.id === 'fl-hold-primary')!;
     const history = bestBySession(state.sessionLogs, exercise);
     expect(history.length).toBeGreaterThan(3);
     expect(trend(history)).toBe('up');
@@ -61,7 +63,7 @@ describe('generateDemoState', () => {
   });
 
   it('keeps the stagnant exercise flat rather than improving', () => {
-    const exercise = program.find((e) => e.id === 'wall-hspu-partial')!;
+    const exercise = program.find((e) => e.id === 'hspu-primary')!;
     const history = bestBySession(state.sessionLogs, exercise);
     expect(history.length).toBeGreaterThan(3);
     expect(trend(history)).not.toBe('up');

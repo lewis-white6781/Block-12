@@ -109,9 +109,10 @@ export default function Review() {
 
       <Card className="mt-4">
         <SectionHeader>Sessions</SectionHeader>
-        <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="mt-2 grid grid-cols-3 gap-2">
           <Stat label="Main" value={`${review.sessionsCompleted.main}/${review.sessionsPlanned.main}`} />
           <Stat label="AM" value={`${review.sessionsCompleted.am}/${review.sessionsPlanned.am}`} />
+          <Stat label="Later" value={`${review.sessionsCompleted.later}/${review.sessionsPlanned.later}`} />
         </div>
       </Card>
 

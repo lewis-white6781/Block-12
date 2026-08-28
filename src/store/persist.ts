@@ -4,6 +4,7 @@
 import { format, startOfWeek } from 'date-fns';
 import { exerciseName } from '../data/exercises';
 import { startOfToday, todayISO } from '../domain/clock';
+import { phaseForWeek } from '../domain/phase';
 import { placeholderSetScore } from '../domain/scoring';
 import type {
   BenchmarkEntry,
@@ -14,7 +15,7 @@ import type {
 } from '../domain/types';
 
 export const STORAGE_KEY = 'block12:v1';
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export interface PersistedState {
   schemaVersion: number;
@@ -151,6 +152,43 @@ function migrateToV4(state: LegacyPersistedState): LegacyPersistedState {
 }
 
 /**
+ * v4 -> v5: the v4.0 hybrid marathon block (SPEC-V4.0.md section 1).
+ *
+ * Two stored fields stopped being valid members of their union:
+ *
+ * 1. `SessionLog.phase`. The old names (calibration, accumulation,
+ *    intensification, test) describe a periodisation that no longer exists, so
+ *    each session's phase is recomputed from the week it was logged in. This
+ *    rewrites what the session *says* about itself, which is acceptable because
+ *    phase was always a pure function of week — nothing was ever stored that
+ *    could not be re-derived.
+ * 2. `Readiness.achillesIrritation`, which is newly required. Old check-ins
+ *    never asked, so 0 ("none") is the only honest default; it is also the value
+ *    that makes the new Achilles volume warning stay silent about history it
+ *    cannot actually speak to.
+ *
+ * Exercise ids are deliberately untouched. The whole v4.0 program is new, but
+ * the old records moved verbatim into retiredExercises.ts and every historical
+ * `exerciseId` still resolves through `lookupExercise`.
+ */
+function migrateToV5(state: LegacyPersistedState): LegacyPersistedState {
+  const sessionLogs = Object.fromEntries(
+    Object.entries((state.sessionLogs as Record<string, SessionLog>) ?? {}).map(([id, session]) => [
+      id,
+      {
+        ...session,
+        phase: phaseForWeek(session.week),
+        readiness: session.readiness
+          ? { ...session.readiness, achillesIrritation: session.readiness.achillesIrritation ?? 0 }
+          : undefined,
+      },
+    ]),
+  );
+
+  return { ...state, sessionLogs };
+}
+
+/**
  * Version-by-version migration so a schema change never wipes a block
  * mid-flight. Guards the zustand `persist` rehydration path AND the JSON
  * import path (`parseImportedState`) with the same logic.
@@ -176,6 +214,10 @@ export function migrate(persistedState: unknown, fromVersion: number): Persisted
 
   if (fromVersion < 4) {
     state = migrateToV4(state);
+  }
+
+  if (fromVersion < 5) {
+    state = migrateToV5(state);
   }
 
   return {
@@ -263,6 +305,7 @@ const CSV_HEADERS = [
   'setIndex',
   'reps',
   'seconds',
+  'minutes',
   'attempts',
   'addedKg',
   'distanceM',
@@ -304,6 +347,7 @@ export function buildSetsCSV(sessionLogs: Record<string, SessionLog>): string {
             index + 1,
             set.reps,
             set.seconds,
+            set.minutes,
             set.attempts ? set.attempts.join('|') : '',
             set.addedKg,
             set.distanceM,

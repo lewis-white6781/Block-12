@@ -1,15 +1,21 @@
 // ---------- program (static, seeded) ----------
+// v4.0: three four-week loading waves replace the old single-arc periodisation.
+// Deloads now fall on weeks 4, 8 and 12 — see SPEC-V4.0.md section 3.
 export type Phase =
-  | 'calibration' // weeks 1–2
-  | 'accumulation' // weeks 3–5
-  | 'deload' // week 6
-  | 'intensification' // weeks 7–9
-  | 'peak' // week 10
-  | 'taper' // week 11
-  | 'test'; // week 12
+  | 'baseline' // week 1  — wave 1, RPE 8 baseline
+  | 'reinforce' // week 2  — wave 1
+  | 'overload' // weeks 3, 6, 10
+  | 'deload' // weeks 4, 8
+  | 'rebuild' // weeks 5, 9
+  | 'peak' // week 7  — highest gym loading of the block
+  | 'marathonPeak' // week 11 — running peaks, gym volume drops
+  | 'taper'; // week 12 — reduce fatigue
 
 export type DayId = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
-export type Block = 'am' | 'main';
+
+// v4.0: a third slot. Wednesday carries an AM grease-the-groove block, a main
+// full-body lift AND a later recovery run, which 'am' | 'main' could not express.
+export type Block = 'am' | 'main' | 'later';
 
 export type MetricType =
   | 'reps' // bodyweight or skill reps
@@ -17,31 +23,56 @@ export type MetricType =
   | 'hold' // seconds
   | 'attempts' // handstand: attempts per set, each with a hold time
   | 'timeOnly' // mobility hold, no scoring
+  | 'runInterval' // a prescribed run block: minutes + RPE + optional distance
+  | 'carry' // loaded carry: distance + added kg + RPE
+  // The two below are no longer prescribed by any exercise in `program`. They
+  // stay in the union because `retiredExercises` entries are typed `Exercise`
+  // and historical logs still resolve through them.
   | 'sprint' // distance + intensity %
-  | 'distanceTime'; // easy run: minutes
+  | 'distanceTime'; // pre-v4 easy run: minutes, stored in `reps`
+
+/**
+ * Which RPE table an exercise is read against — SPEC-V4.0.md section 1 defines
+ * three, and they do not share bounds. A recovery run at RPE 2 and a stretch at
+ * RPE 6 are both unloggable against the 6–10 strength scale.
+ */
+export type RpeScale =
+  | 'strength' // 6–10, reps in reserve. The default.
+  | 'stretch' // 5–8, never 9–10
+  | 'run'; // 1–10, easy work genuinely sits at 2
 
 export interface Prescription {
   weeks: number[]; // e.g. [1,2]
-  sets: number; // target sets
+  // Target sets. ZERO means "not prescribed this week" — `exercisesFor` drops
+  // it. This is how the Wednesday recovery run stays absent in weeks 1, 2 and 4
+  // without `resolvePrescription`'s nearest-earlier fallback leaking a later
+  // week's numbers backwards. SPEC-V4.0.md section 4.
+  sets: number;
   repsLow?: number;
   repsHigh?: number;
   secLow?: number;
   secHigh?: number;
   rpeLow?: number;
   rpeHigh?: number;
+  minutesEach?: number; // runInterval: duration of one prescribed block
+  distanceM?: number; // carry: metres per set
   note?: string; // e.g. "test reps or increased ROM"
   perSide?: boolean;
 }
 
 export interface Exercise {
-  id: string; // stable slug, e.g. 'fl-hard-iso'
+  id: string; // stable slug, e.g. 'fl-hold-primary'
   name: string;
   day: DayId;
   block: Block;
   order: number;
   metric: MetricType;
   ladderId?: string; // links to a variant ladder in ladders.ts
-  tracked: boolean; // false => AM mobility items: completion checkbox only
+  tracked: boolean; // false => completion checkbox only
+  rpeScale?: RpeScale; // default 'strength'
+  setsLabel?: 'sets' | 'rounds'; // GTG blocks prescribe rounds, not sets
+  restSeconds?: number; // where SPEC-V4.0.md states a rest; else bucketed by metric
+  supersetId?: string; // e.g. 'mon-7' for Monday's 7A/7B pair
   coreFunction?: string; // 'anti-extension' etc.
   cues: string[]; // shown collapsed on the card
   progressionLadder: string[]; // ORDERED axes to advance, e.g. ['cleaner line','greater ROM',...]
@@ -70,9 +101,13 @@ export interface SetLog {
   seconds?: number; // for holds; for 'attempts' this is the best attempt
   attempts?: number[]; // seconds per attempt
   addedKg?: number;
-  distanceM?: number; // sprint metric: metres for this rep
+  // Minutes for one run block. Deliberately its own field: the pre-v4
+  // `distanceTime` metric stored minutes in `reps`, which is why run data was
+  // indistinguishable from rep data downstream. SPEC-V4.0.md section 2.
+  minutes?: number;
+  distanceM?: number; // metres — sprint (per rep), carry (per set), run (optional, for pace)
   intensityPct?: number; // sprint metric: intensity % for this rep
-  rpe?: number; // 6..10 in 0.5 steps
+  rpe?: number; // bounds depend on the exercise's RpeScale; always 0.5 steps
   variantId?: string; // snapshot of variant used
   assistanceTier?: number; // 0..3
   romNote?: string; // e.g. "feet on 40cm box", "lean 12cm"
@@ -122,6 +157,9 @@ export interface Readiness {
   soreness: 0 | 1 | 2 | 3;
   elbowIrritation: 0 | 1 | 2 | 3;
   shoulderIrritation: 0 | 1 | 2 | 3;
+  // v4.0: SPEC-V4.0.md section 7's joint rule names Achilles explicitly, and it
+  // is the injury that ends a marathon block. Defaulted to 0 by migrateToV5.
+  achillesIrritation: 0 | 1 | 2 | 3;
   motivation: 0 | 1 | 2 | 3;
 }
 

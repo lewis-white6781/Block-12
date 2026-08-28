@@ -17,9 +17,11 @@ import type { Exercise, SessionLog, SetLog } from './types';
  * better at it, and left the CSV's score column disagreeing with the best
  * shown on screen for the same set.
  */
-export function placeholderSetScore(set: Pick<SetLog, 'reps' | 'seconds' | 'attempts'>): number {
+export function placeholderSetScore(
+  set: Pick<SetLog, 'reps' | 'seconds' | 'minutes' | 'attempts' | 'distanceM'>,
+): number {
   if (set.attempts?.length) return Math.max(...set.attempts);
-  return set.reps ?? set.seconds ?? 0;
+  return set.reps ?? set.seconds ?? set.minutes ?? set.distanceM ?? 0;
 }
 
 /** For weightedReps exercises: bodyweight-normalised relative load and est. 1RM. */
@@ -44,6 +46,7 @@ export function isQualifyingSet(set: SetLog): boolean {
   const hasRawValue =
     set.reps !== undefined ||
     set.seconds !== undefined ||
+    set.minutes !== undefined ||
     (set.attempts?.length ?? 0) > 0 ||
     set.distanceM !== undefined;
   return hasRawValue && set.techniqueFlags.length === 0 && set.rpe !== 10;

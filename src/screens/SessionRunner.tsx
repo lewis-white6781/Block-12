@@ -7,14 +7,14 @@ import { program } from '../data/program';
 import { lookupExercise } from '../data/exercises';
 import { ladders } from '../data/ladders';
 import { currentWeek, exercisesFor, resolvePrescription } from '../domain/phase';
-import { exerciseRollingBestRaw, placeholderSetScore } from '../domain/scoring';
+import { placeholderSetScore } from '../domain/scoring';
 import { checkStopRule } from '../domain/analysis';
 import { convertWeight, fmtKg, parseWeight } from '../domain/units';
 import { roundTo } from '../domain/format';
 import { newId } from '../domain/id';
 import { runSync } from '../sync/syncEngine';
 import type { WeightUnit } from '../domain/units';
-import type { Exercise, SetLog, TechniqueFlag } from '../domain/types';
+import type { Block, Exercise, SetLog, TechniqueFlag } from '../domain/types';
 import { formatPrescription } from '../components/ExerciseCard';
 import SetLogger, { Stepper } from '../components/SetLogger';
 import NumberPad from '../components/NumberPad';
@@ -22,11 +22,13 @@ import RestTimer from '../components/RestTimer';
 import StopRuleBanner from '../components/StopRuleBanner';
 import ProgressionLogger from '../components/ProgressionLogger';
 
-// Rest-duration bucket per SPEC.md section 7.2 ("3–5 min for sprints, 2–3 min for
-// main strength, 90 s for accessories"). The spec names the buckets but not which
-// exercise belongs to which; this heuristic buckets by metric type until/unless a
-// future prompt formalises it as data.
+// Rest between sets. v4.0 states rests explicitly for the movements it cares
+// about (SPEC-V4.0.md: 4–5 min on the primary HSPU, 90–120 s on arms, 2 min
+// recovery between threshold reps), so `exercise.restSeconds` wins where the
+// plan gave a number. The metric buckets below remain the fallback for
+// everything the plan left unspecified.
 function restSecondsFor(exercise: Exercise): number {
+  if (exercise.restSeconds !== undefined) return exercise.restSeconds;
   if (exercise.metric === 'sprint') return 240;
   if (exercise.metric === 'hold' || exercise.metric === 'attempts' || exercise.metric === 'weightedReps') {
     return 150;
@@ -38,22 +40,34 @@ function formatLastTime(sets: SetLog[], metric: Exercise['metric'], unit: Weight
   if (sets.length === 0) return '—';
   if (metric === 'hold' || metric === 'timeOnly' || metric === 'attempts')
     return sets.map((s) => s.seconds ?? '—').join(',') + 's';
+  if (metric === 'runInterval') return sets.map((s) => s.minutes ?? '—').join(',') + ' min';
+  if (metric === 'carry') {
+    const kg = sets[sets.length - 1]?.addedKg;
+    const metres = sets.map((s) => s.distanceM ?? '—').join(',');
+    return kg ? `${metres} m @ +${fmtKg(kg, unit)} ${unit}` : `${metres} m`;
+  }
   const reps = sets.map((s) => s.reps ?? '—').join(',');
   const kg = sets[sets.length - 1]?.addedKg;
   return kg ? `${reps} @ +${fmtKg(kg, unit)} ${unit}` : reps;
 }
 
 function formatLoggedSet(set: SetLog, metric: Exercise['metric']): string {
-  if (metric === 'hold' || metric === 'timeOnly') return `${set.seconds ?? '—'}s`;
+  const rpe = set.rpe !== undefined ? ` RPE ${set.rpe}` : '';
+  if (metric === 'hold' || metric === 'timeOnly') return `${set.seconds ?? '—'}s${rpe}`;
   if (metric === 'attempts') return `${(set.attempts ?? []).join(',')}s`;
+  if (metric === 'runInterval') {
+    const distance = set.distanceM !== undefined ? ` · ${set.distanceM} m` : '';
+    return `${set.minutes ?? '—'} min${rpe}${distance}`;
+  }
+  if (metric === 'carry') return `${set.distanceM ?? '—'} m${rpe}`;
   if (metric === 'sprint') return `${set.distanceM ?? '—'}m @${set.intensityPct ?? '—'}%`;
   if (metric === 'distanceTime') return `${set.reps ?? '—'} min`;
   const rom = set.romCm !== undefined ? ` · ${set.romCm} cm` : '';
-  return `${set.reps ?? '—'} reps RPE ${set.rpe ?? '—'}${rom}`;
+  return `${set.reps ?? '—'} reps${rpe}${rom}`;
 }
 
 export default function SessionRunner() {
-  const params = useParams<{ date: string; block: 'am' | 'main' }>();
+  const params = useParams<{ date: string; block: Block }>();
   const navigate = useNavigate();
   const sessionLogs = useStore((s) => s.sessionLogs);
   const logSet = useStore((s) => s.logSet);
@@ -112,6 +126,7 @@ export default function SessionRunner() {
   // Per-set input state, reset whenever the exercise changes.
   const [reps, setReps] = useState<number | undefined>(undefined);
   const [seconds, setSeconds] = useState<number | undefined>(undefined);
+  const [minutes, setMinutes] = useState<number | undefined>(undefined);
   const [attempts, setAttempts] = useState<number[]>([]);
   const [addedKg, setAddedKg] = useState<number | undefined>(undefined);
   const [rpe, setRpe] = useState<number | undefined>(undefined);
@@ -133,10 +148,14 @@ export default function SessionRunner() {
     if (!exercise) return;
     setReps(prescription?.repsLow ?? previous?.log.sets.at(-1)?.reps);
     setSeconds(undefined);
+    // Run blocks and carries have their duration/distance PRESCRIBED — the
+    // whole point of "3 × 8 min" is that you run 8 minutes. Prefilling them
+    // makes logging a block two taps instead of five.
+    setMinutes(prescription?.minutesEach);
     setAttempts([]);
     setAddedKg(previous?.log.sets.at(-1)?.addedKg ?? 0);
-    setRpe(prescription?.rpeLow ?? 7);
-    setDistanceM(undefined);
+    setRpe(prescription?.rpeLow ?? (exercise.rpeScale === 'run' ? 3 : 7));
+    setDistanceM(prescription?.distanceM);
     setIntensityPct(undefined);
     setVariantId(previous?.log.sets.at(-1)?.variantId);
     setAssistanceTier(previous?.log.sets.at(-1)?.assistanceTier ?? 0);
@@ -166,7 +185,13 @@ export default function SessionRunner() {
     switch (exercise.metric) {
       case 'hold':
       case 'timeOnly':
-        setLog = { ...base, seconds, score: placeholderSetScore({ seconds }) };
+        setLog = { ...base, seconds, rpe, score: placeholderSetScore({ seconds }) };
+        break;
+      case 'runInterval':
+        setLog = { ...base, minutes, rpe, distanceM, score: placeholderSetScore({ minutes }) };
+        break;
+      case 'carry':
+        setLog = { ...base, distanceM, addedKg, rpe, score: placeholderSetScore({ distanceM }) };
         break;
       case 'attempts':
         setLog = {
@@ -202,9 +227,8 @@ export default function SessionRunner() {
           exercise,
           set: lastLoggedSet,
           previousSetThisExercise: loggedSets.length >= 2 ? loggedSets[loggedSets.length - 2] : undefined,
-          rollingBestRaw: exerciseRollingBestRaw(sessionLogs, exercise.id, exercise.metric, sessionId),
+          firstSetThisSession: loggedSets.length >= 2 ? loggedSets[0] : undefined,
           week: session.week,
-          phase: session.phase,
         })
       : null;
 
@@ -309,7 +333,9 @@ export default function SessionRunner() {
           </div>
         )}
 
-        {exercise.metric === 'weightedReps' && (
+        {/* A suitcase carry progresses on load exactly like a weighted rep does —
+            the 30 m is fixed by the plan. */}
+        {(exercise.metric === 'weightedReps' || exercise.metric === 'carry') && (
           <label className="mt-3 block text-sm">
             <span className="text-xs text-muted">Added {settings.weightUnit}</span>
             <button
@@ -351,6 +377,7 @@ export default function SessionRunner() {
                 <div className="mb-1 text-xs uppercase tracking-wide text-muted">SET {i + 1}</div>
                 <SetLogger
                   metric={exercise.metric}
+                  rpeScale={exercise.rpeScale ?? 'strength'}
                   reps={reps}
                   onRepsChange={setReps}
                   onTapReps={() => setPadField('reps')}
@@ -360,11 +387,12 @@ export default function SessionRunner() {
                   attempts={attempts}
                   onAttempt={(s) => setAttempts((a) => [...a, s])}
                   onHoldComplete={setSeconds}
+                  minutes={minutes}
+                  onTapMinutes={() => setPadField('minutes')}
                   distanceM={distanceM}
                   onTapDistance={() => setPadField('distance')}
                   intensityPct={intensityPct}
                   onTapIntensity={() => setPadField('intensity')}
-                  onTapMinutes={() => setPadField('minutes')}
                   flags={flags}
                   onToggleFlag={(flag) =>
                     setFlags((f) => (f.includes(flag) ? f.filter((x) => x !== flag) : [...f, flag]))
@@ -422,8 +450,9 @@ export default function SessionRunner() {
       <NumberPad
         open={padField === 'minutes'}
         label="Minutes"
-        value={reps}
-        onConfirm={setReps}
+        value={exercise.metric === 'runInterval' ? minutes : reps}
+        allowDecimal
+        onConfirm={exercise.metric === 'runInterval' ? setMinutes : setReps}
         onClose={() => setPadField(null)}
       />
       <NumberPad

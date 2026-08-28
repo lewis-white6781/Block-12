@@ -153,6 +153,59 @@ describe('migrate', () => {
     expect(typeof result.sessionLogs['2026-01-05:main'].updatedAt).toBe('string');
   });
 
+  // ---- v4 -> v5 (SPEC-V4.0.md section 1) ----
+
+  /** A v4 session carrying a phase name and a readiness shape that v4.0 retired. */
+  function v4State() {
+    return {
+      schemaVersion: 4,
+      settings: { ...defaultSettings(), blockStartDate: '2026-01-05' },
+      dailyEntries: {},
+      benchmarkEntries: {},
+      progressionEvents: [],
+      sessionLogs: {
+        '2026-02-16:main': {
+          id: '2026-02-16:main',
+          date: '2026-02-16',
+          week: 7,
+          phase: 'intensification',
+          day: 'mon',
+          block: 'main',
+          startedAt: '2026-02-16T09:00:00.000Z',
+          updatedAt: '2026-02-16T09:30:00.000Z',
+          readiness: { sleepHours: 8, soreness: 1, elbowIrritation: 0, shoulderIrritation: 1, motivation: 3 },
+          exercises: [{ exerciseId: 'ring-dip', sets: [{ id: 'a', reps: 5, rpe: 8, techniqueFlags: [], score: 5 }] }],
+        },
+      },
+    };
+  }
+
+  it('recomputes each session phase from its week under the three-wave model', () => {
+    const result = migrate(v4State(), 4);
+    // Week 7 was 'intensification'; under v4.0's waves it is the peak week.
+    expect(result.sessionLogs['2026-02-16:main'].phase).toBe('peak');
+  });
+
+  it('defaults achillesIrritation to 0 on readiness check-ins that never asked', () => {
+    const result = migrate(v4State(), 4);
+    const readiness = result.sessionLogs['2026-02-16:main'].readiness!;
+    expect(readiness.achillesIrritation).toBe(0);
+    // and leaves what WAS answered alone
+    expect(readiness.shoulderIrritation).toBe(1);
+    expect(readiness.sleepHours).toBe(8);
+  });
+
+  it('never rewrites a historical exerciseId', () => {
+    const result = migrate(v4State(), 4);
+    expect(result.sessionLogs['2026-02-16:main'].exercises[0].exerciseId).toBe('ring-dip');
+  });
+
+  it('leaves sessions with no readiness alone rather than inventing one', () => {
+    const noReadiness = v4State();
+    delete (noReadiness.sessionLogs['2026-02-16:main'] as { readiness?: unknown }).readiness;
+    expect(migrate(noReadiness, 4).sessionLogs['2026-02-16:main'].readiness).toBeUndefined();
+  });
+
   it('leaves existing data untouched when migrating from the current version', () => {
     const state: PersistedState = {
       ...defaultPersistedState(),
@@ -176,13 +229,13 @@ describe('export / import round-trip', () => {
           id: '2026-01-05:main',
           date: '2026-01-05',
           week: 1,
-          phase: 'calibration',
+          phase: 'baseline',
           day: 'mon',
           block: 'main',
           startedAt: '2026-01-05T08:00:00.000Z',
           exercises: [
             {
-              exerciseId: 'pike-hspu',
+              exerciseId: 'hspu-primary',
               sets: [{ id: 's1', reps: 5, rpe: 7, techniqueFlags: [], score: 100 }],
             },
           ],

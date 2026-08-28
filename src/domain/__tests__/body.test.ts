@@ -129,7 +129,7 @@ describe('weeklySummaries', () => {
       id,
       date: '2026-01-01',
       week,
-      phase: 'calibration',
+      phase: 'baseline',
       day: 'mon',
       block: 'main',
       startedAt: '2026-01-01T08:00:00.000Z',

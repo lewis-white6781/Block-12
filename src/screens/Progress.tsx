@@ -20,7 +20,7 @@ import {
   trendArrow,
 } from '../domain/performance';
 import type { Best } from '../domain/performance';
-import type { DayId, Exercise, SessionLog } from '../domain/types';
+import type { Block, DayId, Exercise, SessionLog } from '../domain/types';
 import ProgressChart from '../components/ProgressChart';
 import { tooltipFormatter } from '../components/chartFormat';
 import Sheet from '../components/Sheet';
@@ -29,6 +29,7 @@ import Card from '../components/Card';
 import SectionHeader from '../components/SectionHeader';
 
 const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const BLOCK_ORDER: Block[] = ['am', 'main', 'later'];
 
 /**
  * Grouped-by-day-and-block browse view, or a flat name search — no invented
@@ -54,13 +55,17 @@ function ExercisePickerSheet({
     return exercises.filter((e) => e.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name));
   }, [query, exercises]);
 
+  // Grouped day -> block, over all three blocks. Listing only am/main here was
+  // what would have hidden both flexibility sessions from the picker entirely.
   const groups = useMemo(() => {
     return DAY_ORDER.map((day) => ({
       day,
       label: dayTitles[day],
-      main: exercises.filter((e) => e.day === day && e.block === 'main').sort((a, b) => a.order - b.order),
-      am: exercises.filter((e) => e.day === day && e.block === 'am').sort((a, b) => a.order - b.order),
-    })).filter((g) => g.main.length > 0 || g.am.length > 0);
+      blocks: BLOCK_ORDER.map((block) => ({
+        block,
+        items: exercises.filter((e) => e.day === day && e.block === block).sort((a, b) => a.order - b.order),
+      })).filter((b) => b.items.length > 0),
+    })).filter((g) => g.blocks.length > 0);
   }, [exercises]);
 
   function pick(id: string) {
@@ -112,20 +117,13 @@ function ExercisePickerSheet({
           groups.map((g) => (
             <div key={g.day} className="mb-3">
               <div className="text-xs uppercase tracking-wide text-muted">{g.label}</div>
-              {g.main.length > 0 && (
-                <ul className="mt-1 divide-y divide-line">
-                  {g.main.map((e) => (
+              {g.blocks.map(({ block, items }) => (
+                <ul key={block} className="mt-1 divide-y divide-line">
+                  {items.map((e) => (
                     <ExerciseRow key={e.id} exercise={e} showDay={false} />
                   ))}
                 </ul>
-              )}
-              {g.am.length > 0 && (
-                <ul className="mt-1 divide-y divide-line">
-                  {g.am.map((e) => (
-                    <ExerciseRow key={e.id} exercise={e} showDay={false} />
-                  ))}
-                </ul>
-              )}
+              ))}
             </div>
           ))
         )}
