@@ -4,6 +4,85 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-08-27
+
+The block changed goal. It now trains for a marathon while holding onto the
+calisthenics, which reorganises everything around running. Documented formally
+in [SPEC-V4.0.md](./SPEC-V4.0.md); the training content is transcribed from
+[12_week_hybrid_marathon_calisthenics_plan.md](./12_week_hybrid_marathon_calisthenics_plan.md).
+
+### Changed — training
+
+- **Five to six runs a week**, replacing one Sunday run and one sprint session:
+  a Tuesday threshold session (8-minute reps, 3 building to 5), a Wednesday
+  recovery run, easy runs Thursday and Saturday, and a long run that builds to
+  **eleven 15-minute blocks — 165 minutes — in week 11**. Cap the longest run at
+  30–32 km even where the time prescription would take you farther.
+- **Three full-body days** (Mon/Wed/Fri) replace the five body-part days.
+  Monday is HSPU and heavy dip, Wednesday is front lever, heavy pull and the
+  main lower-body work, Friday is mixed calisthenics and physique.
+- **Daily mobility is gone.** Mornings are now grease-the-groove skill practice
+  on Mon/Wed/Fri only — handstand, front lever, and a mixed round — prescribed
+  in **rounds** of the whole list at RPE 4–5. Motor learning, not fatigue.
+- **Two flexibility sessions**: Tuesday evening (pancake, middle split,
+  handstand shoulders) and Sunday evening (front split, pike, bridge), each with
+  six fixed items and its own weekly volume. Sunday is deliberately the lighter
+  of the two — it must not become a second leg session after the long run.
+- **Periodisation is three four-week waves**, deloading at weeks 4, 8 and 12
+  instead of a single arc deloading at week 6. Week 7 is the highest gym loading
+  of the block; week 11 peaks the long run and steps gym volume back to pay for
+  it; week 12 reduces fatigue rather than testing.
+- Lower-body volume falls deliberately through the block as mileage rises.
+- The exercises are fixed across the block. Reps and hold durations do not
+  change; sets, RPE, running volume and flexibility volume do.
+
+### Added
+
+- **A third session slot per day, `later`.** Wednesday runs a morning GTG block,
+  a full-body lift *and* an evening recovery run — the two-slot model could not
+  express it. Today, Program and Review all show three.
+- **Runs are logged properly.** A new `runInterval` metric captures minutes, RPE
+  and an optional distance per prescribed block, with minutes prefilled from the
+  prescription. `SetLog.minutes` is its own field; the old `distanceTime` metric
+  stored minutes in `reps`, which made run data indistinguishable from rep data
+  everywhere downstream.
+- **Three RPE scales** (`strength` 6–10, `stretch` 5–8, `run` 1–10), so the
+  stepper matches the table the exercise is actually read against. An easy run at
+  RPE 2 was previously unloggable — the stepper's floor was 6.
+- **Holds now capture RPE**, which is how the entire flexibility prescription is
+  stated. Before this, a stretch session logged as bare seconds.
+- A `carry` metric for the suitcase carry: 30 m per side, progressed by load.
+- **Achilles irritation** joins the readiness check-in, and joint-volume warnings
+  now cover three joints. The days each one fires on are derived from the program
+  rather than hardcoded, which is what had silently gone wrong when the split moved.
+- Six flexibility benchmarks, one per progression chain, measured in weeks 1, 8
+  and 12. The mid-block test moved off week 6, which is now an overload week —
+  measuring end-range flexibility there tests fatigue.
+- Render smoke tests for Today, Program and SessionRunner.
+
+### Changed — app
+
+- The RPE ceiling is `weekRpeCap(week)`, read off the plan's own weekly tables,
+  replacing `phaseRpeCap(phase, exerciseId)`. There is no test week to exempt.
+- The stop rule's 15% quality-drop check is now measured **within the session**
+  against its own first working set, per the plan's Performance Drop Rule.
+- Program gained the plan's three RPE tables, its autoregulation rules and its
+  joint/tendon rule.
+- Schema **v5**: session phases are recomputed from their week (the old names
+  describe a periodisation that no longer exists) and old readiness check-ins
+  default `achillesIrritation` to 0. No `exerciseId` is rewritten. The sets CSV
+  gains a `minutes` column. The localStorage key and Supabase schema are untouched.
+
+### Removed
+
+- **The optional second run and its four-condition gate.** Running is prescribed
+  now, not earned; the gate keyed off a sprint session that no longer exists.
+- The 66 movements of the pre-v4 block, moved verbatim into
+  `retiredExercises.ts`. Nothing is deleted and every historical log still
+  resolves its exercise name in Progress, Review and the CSV export.
+  `ring-dip`, `ring-pullup` and `fl-raise` carry over with their ids intact —
+  same movement, same role — so their charts span both blocks.
+
 ## [3.0.0] - 2026-08-04
 
 Monday reprogrammed, the progress maths made readable, day navigation
