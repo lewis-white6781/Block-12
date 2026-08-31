@@ -25,6 +25,16 @@ function buildId(): string {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Bound to 0.0.0.0 on a pinned port so the phone gets one LAN URL that does
+  // not move. strictPort matters more than it looks: the default behaviour is
+  // to drift to the next free port when 5173 is taken, which silently hands out
+  // a different address every launch — the one thing a bookmarked phone link
+  // cannot survive. Failing loudly is the useful behaviour here.
+  server: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_ID__: JSON.stringify(buildId()),
