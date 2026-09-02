@@ -301,3 +301,35 @@ describe('export / import round-trip', () => {
     expect(typeof imported.dailyEntries['2026-01-05'].updatedAt).toBe('string');
   });
 });
+
+// The reset survives a sync only if migrate() leaves settings.updatedAt alone.
+// migrate() runs on the remote state on every pull, so re-stamping it made the
+// incoming copy always newer than local, mergeState always chose remote, and
+// "Reset block" was silently reverted — old blockStartDate back, resetAt gone.
+describe('migrate() and settings.updatedAt', () => {
+  it('preserves a stored updatedAt rather than re-stamping it', () => {
+    const stored = { ...defaultSettings(), updatedAt: '2026-01-01T00:00:00.000Z' };
+    const migrated = migrate({ schemaVersion: SCHEMA_VERSION, settings: stored }, SCHEMA_VERSION);
+    expect(migrated.settings.updatedAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('backfills updatedAt when the stored settings predate the field', () => {
+    const legacy = { blockStartDate: '2026-01-05', startWeightKg: 77 };
+    const migrated = migrate({ schemaVersion: 1, settings: legacy }, 1);
+    expect(typeof migrated.settings.updatedAt).toBe('string');
+    expect(Number.isNaN(Date.parse(migrated.settings.updatedAt))).toBe(false);
+  });
+
+  it('keeps resetAt and blockStartDate through a migrate round trip', () => {
+    const stored = {
+      ...defaultSettings(),
+      blockStartDate: '2026-08-31',
+      resetAt: '2026-08-31T09:00:00.000Z',
+      updatedAt: '2026-08-31T09:00:00.000Z',
+    };
+    const migrated = migrate({ schemaVersion: SCHEMA_VERSION, settings: stored }, SCHEMA_VERSION);
+    expect(migrated.settings.blockStartDate).toBe('2026-08-31');
+    expect(migrated.settings.resetAt).toBe('2026-08-31T09:00:00.000Z');
+    expect(migrated.settings.updatedAt).toBe('2026-08-31T09:00:00.000Z');
+  });
+});

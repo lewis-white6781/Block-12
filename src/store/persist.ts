@@ -222,7 +222,15 @@ export function migrate(persistedState: unknown, fromVersion: number): Persisted
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    settings: { ...defaultSettings(), ...state.settings, updatedAt: new Date().toISOString() },
+    // updatedAt is NOT re-stamped here. migrate() runs on the REMOTE state on
+    // every pull (syncEngine pullRemote), so stamping it `now` made the incoming
+    // remote settings unconditionally newer than local, and mergeState picks
+    // settings by last-write-wins. That handed every merge to the remote copy,
+    // which silently undid "Reset block" — restoring the old blockStartDate and,
+    // worse, dropping the resetAt tombstone that keeps deleted sessions deleted.
+    // Spreading defaultSettings() first already backfills updatedAt when the
+    // stored settings predate it (v1/v2), which is all this ever needed to do.
+    settings: { ...defaultSettings(), ...state.settings },
     dailyEntries: state.dailyEntries ?? {},
     sessionLogs: state.sessionLogs ?? {},
     benchmarkEntries: state.benchmarkEntries ?? {},
