@@ -180,10 +180,19 @@ describe('migrate', () => {
     };
   }
 
-  it('recomputes each session phase from its week under the three-wave model', () => {
+  it('recomputes each session phase from its week under the current block', () => {
     const result = migrate(v4State(), 4);
-    // Week 7 was 'intensification'; under v4.0's waves it is the peak week.
-    expect(result.sessionLogs['2026-02-16:main'].phase).toBe('peak');
+    // Week 7 is 'intensification' under v5.0 — the v5 and v6 migrations both
+    // recompute phase, so any older name ends up at whatever phase.ts says now.
+    expect(result.sessionLogs['2026-02-16:main'].phase).toBe('intensification');
+  });
+
+  it('v5 -> v6 recomputes a v4 wave-era phase name to the v5.0 arc', () => {
+    const state = v4State();
+    state.schemaVersion = 5;
+    state.sessionLogs['2026-02-16:main'].phase = 'peak' as never; // v4's week-7 name
+    const result = migrate(state, 5);
+    expect(result.sessionLogs['2026-02-16:main'].phase).toBe('intensification');
   });
 
   it('defaults achillesIrritation to 0 on readiness check-ins that never asked', () => {
@@ -229,7 +238,7 @@ describe('export / import round-trip', () => {
           id: '2026-01-05:main',
           date: '2026-01-05',
           week: 1,
-          phase: 'baseline',
+          phase: 'reentry',
           day: 'mon',
           block: 'main',
           startedAt: '2026-01-05T08:00:00.000Z',

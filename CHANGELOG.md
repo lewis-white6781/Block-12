@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-09-12
+
+The block changed goal again. It is now a **calisthenics-priority cut** — 80 kg
+to ~73 kg over twelve weeks with the front lever and HSPU as the primary goals —
+on a push / pull / legs split, with cardio kept supportive rather than dominant.
+Documented formally in [SPEC-V5.0.md](./SPEC-V5.0.md); the training content is
+transcribed from [updatedblock20.md](./updatedblock20.md).
+
+### Changed — training
+
+- **Push / Pull / Legs / Rest / Push / Pull / Rest.** Push A (Mon) leads with
+  the deficit pike HSPU, Push B (Fri) with the weighted ring dip; Pull A (Tue)
+  is the hard front-lever session, Pull B (Sat) the heavy weighted pull-up with
+  easier banded lever work; Legs (Wed) is hack squat, Bulgarian, Nordic, calf
+  and tibialis. **Thursday is a rest day** with only Flexibility A in the
+  evening — the first day of any block to have no main session.
+- **Three cardio sessions replace five to six runs**: a 20–30 min moderate
+  continuous session after Push A, 30 s / 90 s HIIT after Push B building to
+  eight intervals, and a 45–90 min long low-intensity session on Sunday. All
+  three are logged on the run RPE scale and none of them is a race.
+- **One arc, one deload.** Re-entry (1–2), accumulation (3–5), deload (6),
+  intensification (7–10), realization (11), consolidation (12), replacing
+  three four-week waves. Week 6 drops volume 40–50% and is mandatory.
+- Every accessory carries the plan's own 12-row table; the ring dip, the
+  upper-body accessories and the lower-body accessories each share one table
+  the plan itself cross-references, so identical prescriptions cannot drift.
+- Flexibility A prescribes loaded movements and static holds on separate set
+  tables. Both sessions cap at RPE 7.5 — the plan never needs 8+.
+- Grease-the-groove rounds are now 2, 2, 2, 3, 3, 1, 2, 2, 3, 3, 2, 1–2.
+- Benchmarks move to weeks **1 and 12**; the week-8 mid-test is gone.
+
+### Changed — app
+
+- Phase badge, chart bands and phase notes rewritten for the six new phases.
+- Program's reference sections now carry the plan's two RPE tables, its
+  cut-specific autoregulation list, and its definition of progress during a cut.
+- End-of-block targets rebuilt from the plan's §12 benchmarks: seven groups, the
+  last now **cardio** (30-min moderate session, eight HIIT intervals, 80+ min
+  long session — all auto-checked).
+- Joint warnings gain the three cardio sessions on the Achilles set, and the
+  rear-delt fly and both curls on the shoulder and elbow sets.
+- Schema **v6**: every stored session phase is recomputed from its week. No
+  `exerciseId` is rewritten; the localStorage key and Supabase schema are
+  untouched.
+
+### Removed
+
+- The 24 marathon-block movements that do not carry over (every run, the
+  suitcase carry, the split squats and rows of the full-body days, the
+  wall-facing negative) moved verbatim into `retiredExercises.ts`, along
+  with a frozen copy of v4.0's authoring helpers so the records expand to
+  exactly what they prescribed. **Forty-three exercises carry their ids over**,
+  many to a different day, so their charts span both blocks.
+- `waveForWeek`. Nothing in the plan is a wave.
+
 ## [4.0.0] - 2026-08-27
 
 The block changed goal. It now trains for a marathon while holding onto the

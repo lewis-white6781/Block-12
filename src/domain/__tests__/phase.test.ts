@@ -12,7 +12,6 @@ import {
   isWithinBlock,
   phaseForWeek,
   resolvePrescription,
-  waveForWeek,
   weekRpeCap,
 } from '../phase';
 import type { Exercise, Phase } from '../types';
@@ -26,21 +25,21 @@ describe('dayIdForDate', () => {
   });
 });
 
-// SPEC-V4.0.md section 3 — three four-week loading waves.
+// SPEC-V5.0.md section 3 — one arc with a single deload at week 6.
 describe('phaseForWeek', () => {
   const expected: Record<number, Phase> = {
-    1: 'baseline',
-    2: 'reinforce',
-    3: 'overload',
-    4: 'deload',
-    5: 'rebuild',
-    6: 'overload',
-    7: 'peak',
-    8: 'deload',
-    9: 'rebuild',
-    10: 'overload',
-    11: 'marathonPeak',
-    12: 'taper',
+    1: 'reentry',
+    2: 'reentry',
+    3: 'accumulation',
+    4: 'accumulation',
+    5: 'accumulation',
+    6: 'deload',
+    7: 'intensification',
+    8: 'intensification',
+    9: 'intensification',
+    10: 'intensification',
+    11: 'realization',
+    12: 'consolidation',
   };
 
   it('resolves all 12 weeks to the phase in the week→phase map', () => {
@@ -49,38 +48,31 @@ describe('phaseForWeek', () => {
     }
   });
 
-  it('deloads land at the end of each of the first two waves', () => {
-    expect(phaseForWeek(4)).toBe('deload');
-    expect(phaseForWeek(8)).toBe('deload');
+  it('deloads exactly once, at week 6', () => {
+    const deloads = Array.from({ length: 12 }, (_, i) => i + 1).filter((w) => phaseForWeek(w) === 'deload');
+    expect(deloads).toEqual([6]);
   });
 
   it('clamps rather than returning undefined outside 1..12', () => {
-    expect(phaseForWeek(0)).toBe('baseline');
-    expect(phaseForWeek(99)).toBe('taper');
-  });
-});
-
-describe('waveForWeek', () => {
-  it('splits the block into three four-week waves', () => {
-    expect([1, 2, 3, 4].map(waveForWeek)).toEqual([1, 1, 1, 1]);
-    expect([5, 6, 7, 8].map(waveForWeek)).toEqual([2, 2, 2, 2]);
-    expect([9, 10, 11, 12].map(waveForWeek)).toEqual([3, 3, 3, 3]);
+    expect(phaseForWeek(0)).toBe('reentry');
+    expect(phaseForWeek(99)).toBe('consolidation');
   });
 });
 
 describe('weekRpeCap', () => {
-  // Read off SPEC-V4.0.md's own weekly tables — the highest RPE the plan
-  // prescribes that week, not an invented ceiling.
+  // Read off SPEC-V5.0.md's own weekly tables — the highest STRENGTH-scale RPE
+  // the plan prescribes that week, not an invented ceiling. Week 5 and weeks
+  // 10–11 reach 9 on the accessories; the week-6 deload tops out at 7.
   it('matches the plan\'s maximum prescribed RPE per week', () => {
-    const expected = [8, 8.5, 9, 7, 8.5, 9, 9, 7, 8.5, 9, 8.5, 7.5];
+    const expected = [8, 8, 8.5, 8.5, 9, 7, 8, 8.5, 8.5, 9, 9, 8];
     for (let week = 1; week <= 12; week++) {
       expect(weekRpeCap(week)).toBe(expected[week - 1]);
     }
   });
 
-  it('drops to 7 in both deload weeks', () => {
-    expect(weekRpeCap(4)).toBe(7);
-    expect(weekRpeCap(8)).toBe(7);
+  it('drops to 7 in the week-6 deload and nowhere else', () => {
+    expect(weekRpeCap(6)).toBe(7);
+    for (const week of [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12]) expect(weekRpeCap(week)).toBeGreaterThan(7);
   });
 });
 

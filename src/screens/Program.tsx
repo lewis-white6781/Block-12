@@ -4,7 +4,7 @@
 // the reference the plan used to live in a document; it now lives in the app.
 import { useMemo, useState } from 'react';
 import { program, sessionTitles } from '../data/program';
-import { exercisesFor, phaseForWeek, resolvePrescription, waveForWeek } from '../domain/phase';
+import { exercisesFor, phaseForWeek, resolvePrescription } from '../domain/phase';
 import { PHASE_NOTES } from '../domain/review';
 import type { Block, DayId, Exercise } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
@@ -26,59 +26,50 @@ const DAY_LABEL: Record<DayId, string> = {
 
 const BLOCK_ORDER: Block[] = ['am', 'main', 'later'];
 
-// SPEC-V4.0.md section 1 — three RPE tables, because the block trains three
-// kinds of work and they do not share a scale.
+// SPEC-V5.0.md section 2 — two RPE tables. Resistance and calisthenics skill
+// work share one scale; flexibility has its own, and never needs 8+.
 const RPE_TABLES: { id: string; label: string; note: string; rows: { rpe: string; meaning: string }[] }[] = [
   {
-    id: 'dynamic',
-    label: 'Dynamic strength',
-    note: 'RPE 8 means you finish knowing you could do about two more perfect reps. Technical breakdown counts as failure — do not count ugly repetitions.',
+    id: 'resistance',
+    label: 'Resistance training',
+    note: 'For calisthenics skill work, technical failure means the position or movement standard breaks: front lever hips drop, HSPU ROM shortens or the line collapses, a ring dip loses stable depth or lockout. Do not turn prescribed RPE 8 work into RPE 10 work because you feel good.',
     rows: [
-      { rpe: '5', meaning: '5+ reps in reserve' },
-      { rpe: '6', meaning: '4 reps in reserve' },
+      { rpe: '6', meaning: '4+ reps in reserve' },
       { rpe: '7', meaning: '3 reps in reserve' },
-      { rpe: '8', meaning: '2 reps in reserve' },
-      { rpe: '8.5', meaning: '1–2 reps in reserve' },
-      { rpe: '9', meaning: '1 rep in reserve' },
+      { rpe: '7.5', meaning: '2–3 reps in reserve' },
+      { rpe: '8', meaning: '~2 reps in reserve' },
+      { rpe: '8.5', meaning: '~1–2 reps in reserve' },
+      { rpe: '9', meaning: '~1 rep in reserve' },
       { rpe: '10', meaning: '0 / technical failure' },
-    ],
-  },
-  {
-    id: 'isometric',
-    label: 'Isometric holds',
-    note: 'Read as clean seconds remaining. A front lever hold ends when the position deteriorates — not when gravity finally wins.',
-    rows: [
-      { rpe: '5', meaning: '6+ s remaining' },
-      { rpe: '6', meaning: '5 s remaining' },
-      { rpe: '7', meaning: '3–4 s remaining' },
-      { rpe: '8', meaning: '~2 s remaining' },
-      { rpe: '8.5', meaning: '~1–2 s remaining' },
-      { rpe: '9', meaning: '~1 s remaining' },
-      { rpe: '10', meaning: 'position failure' },
     ],
   },
   {
     id: 'flexibility',
     label: 'Flexibility',
-    note: 'For this block, flexibility work should almost always stay at RPE 6–7. RPE 9–10 is not used.',
+    note: 'Progress flexibility through more usable ROM → better control → modest external load, not by tolerating more pain.',
     rows: [
       { rpe: '5', meaning: 'easy' },
       { rpe: '6', meaning: 'clear stretch, fully controlled' },
-      { rpe: '7', meaning: 'strong stretch, still controlled' },
-      { rpe: '8', meaning: 'very strong, but no pain' },
-      { rpe: '9–10', meaning: 'not used' },
+      { rpe: '7', meaning: 'strong but comfortable' },
+      { rpe: '7.5', meaning: 'strong end-range work, still relaxed' },
+      { rpe: '8+', meaning: 'not required' },
     ],
   },
 ];
 
-// SPEC-V4.0.md section 7 — the autoregulation rules that override the sheet.
+// SPEC-V5.0.md section 7 — cut-specific autoregulation. Reduce load or volume
+// that day if any of these hold; never compensate for poor recovery by training
+// to failure, adding unscheduled sets, racing the Sunday cardio, or testing
+// HSPU / front lever every week.
 const AUTOREGULATION_RULES: string[] = [
-  'If the first two sets feel a full point above target, cut load, leverage, ROM or skill difficulty by 5–10%.',
-  'If performance falls more than ~15% from the first working set, drop the last set, reduce load, or regress the skill.',
-  'Never turn a planned RPE 8 day into an accidental RPE 10 session.',
+  'The first work set is ~1 RPE above prescription.',
+  'Performance falls more than 10–15% across sets.',
+  'Multiple nights of poor sleep have accumulated.',
+  'Joints or tendons are becoming progressively irritated.',
+  'Bodyweight is dropping much faster than intended and strength is falling.',
 ];
 
-// SPEC-V4.0.md section 7's joint/tendon rule — remove the movement, do not
+// SPEC-V5.0.md section 7's joint/tendon rule — remove the movement, do not
 // "RPE through" it.
 const TENDON_RULES: string[] = [
   'sharp pain',
@@ -88,18 +79,19 @@ const TENDON_RULES: string[] = [
   'pain that changes how you move',
 ];
 
-// SPEC-V4.0.md section 8 — what progress is allowed to look like during a cut.
+// SPEC-V5.0.md section 8 — what counts as progress during a cut.
 const PROGRESSIVE_OVERLOAD_AXES: string[] = [
-  'more weight',
-  'more ROM',
-  'harder leverage',
+  'same weighted dip at lower bodyweight',
+  'same weighted pull-up at lower bodyweight',
+  'harder HSPU leverage',
+  'greater HSPU ROM',
+  'less wall assistance',
+  'harder front-lever progression',
   'less band assistance',
-  'better balance',
-  'better body line',
-  'same absolute strength at lower bodyweight',
-  'better running pace at the same RPE',
-  'improved flexibility',
-  'better technical consistency',
+  'better lever body line',
+  'stronger dragon flag / rollout / wiper',
+  'deeper pancake / splits / pike',
+  'greater cardio output at the same RPE',
 ];
 
 function ExerciseEntry({ exercise, week }: { exercise: Exercise; week: number }) {
@@ -130,7 +122,6 @@ export default function Program() {
   const [week, setWeek] = useState(1);
   const [dayId, setDayId] = useState<DayId>('mon');
   const phase = phaseForWeek(week);
-  const wave = waveForWeek(week);
 
   // All three slots, each hidden when the day has nothing in it — Thursday runs
   // and does nothing else, and the Wednesday recovery run is absent in weeks
@@ -147,7 +138,7 @@ export default function Program() {
 
   return (
     <div className="flex h-full flex-col">
-      <PhaseBadge week={week} phase={phase} dateLabel={`Wave ${wave}`} />
+      <PhaseBadge week={week} phase={phase} dateLabel="Program" />
 
       <div className="flex-1 overflow-y-auto p-4 text-text">
         <div className="flex items-center justify-between">
@@ -196,7 +187,7 @@ export default function Program() {
 
         <Card className="mt-4">
           <SectionHeader>
-            Wave {wave} — {phase}
+            Week {week} — {phase}
           </SectionHeader>
           <p className="mt-2 text-sm text-text">{PHASE_NOTES[phase]}</p>
         </Card>

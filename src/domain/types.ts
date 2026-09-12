@@ -2,14 +2,12 @@
 // v4.0: three four-week loading waves replace the old single-arc periodisation.
 // Deloads now fall on weeks 4, 8 and 12 — see SPEC-V4.0.md section 3.
 export type Phase =
-  | 'baseline' // week 1  — wave 1, RPE 8 baseline
-  | 'reinforce' // week 2  — wave 1
-  | 'overload' // weeks 3, 6, 10
-  | 'deload' // weeks 4, 8
-  | 'rebuild' // weeks 5, 9
-  | 'peak' // week 7  — highest gym loading of the block
-  | 'marathonPeak' // week 11 — running peaks, gym volume drops
-  | 'taper'; // week 12 — reduce fatigue
+  | 'reentry' // weeks 1–2  — establish the post-break baseline around RPE 8
+  | 'accumulation' // weeks 3–5  — sets and difficulty climb
+  | 'deload' // week 6    — volume −40–50%, RPE 6–7
+  | 'intensification' // weeks 7–10 — harder leverage, heavier loading
+  | 'realization' // week 11   — highest-quality hard work, no failure
+  | 'consolidation'; // week 12   — lower volume, benchmark and compare
 
 export type DayId = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 

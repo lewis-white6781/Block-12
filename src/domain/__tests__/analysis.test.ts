@@ -119,22 +119,22 @@ describe('checkStopRule', () => {
 
   it('amber: RPE above the week cap', () => {
     // Week 4 is a deload; the plan prescribes nothing above RPE 7 that week.
-    const result = checkStopRule({ ...base, week: 4, set: set({ seconds: 6, rpe: 8 }) });
-    expect(result).toEqual({ severity: 'amber', message: 'Week 4 prescribes nothing above RPE 7.' });
+    const result = checkStopRule({ ...base, week: 6, set: set({ seconds: 6, rpe: 8 }) });
+    expect(result).toEqual({ severity: 'amber', message: 'Week 6 prescribes nothing above RPE 7.' });
   });
 
-  it('allows the full prescribed range in an overload week', () => {
-    expect(checkStopRule({ ...base, week: 3, set: set({ seconds: 6, rpe: 9 }) })).toBeNull();
+  it('allows the full prescribed range in a week the plan takes to RPE 9', () => {
+    expect(checkStopRule({ ...base, week: 5, set: set({ seconds: 6, rpe: 9 }) })).toBeNull();
   });
 
   // The strength RPE table is the only one these two rules speak. A stretch at
   // RPE 7 or an easy run at RPE 2 are different scales entirely.
   it('ignores the RPE rules for stretch and run scales', () => {
     const stretch = exercise({ rpeScale: 'stretch' });
-    expect(checkStopRule({ ...base, week: 4, exercise: stretch, set: set({ seconds: 45, rpe: 7 }) })).toBeNull();
+    expect(checkStopRule({ ...base, week: 6, exercise: stretch, set: set({ seconds: 45, rpe: 7 }) })).toBeNull();
 
     const run = exercise({ metric: 'runInterval', rpeScale: 'run' });
-    expect(checkStopRule({ ...base, week: 4, exercise: run, set: set({ minutes: 10, rpe: 8 }) })).toBeNull();
+    expect(checkStopRule({ ...base, week: 6, exercise: run, set: set({ minutes: 10, rpe: 8 }) })).toBeNull();
   });
 });
 
@@ -223,7 +223,7 @@ describe('detectStagnation (acceptance tests 13-14)', () => {
         recentReadiness: [readiness(), readiness(), readiness()],
         daysWithLoggedWeightInLast7: 6,
       },
-      phase: 'overload',
+      phase: 'accumulation',
       progressionEvents: [
         { id: 'e1', date: '2026-01-10', exerciseId: 'pike-hspu', axis: 'cleaner line', from: 'a', to: 'b' },
       ],
@@ -242,7 +242,7 @@ describe('detectStagnation (acceptance tests 13-14)', () => {
         recentReadiness: [readiness({ soreness: 3 }), readiness(), readiness()],
         daysWithLoggedWeightInLast7: 6,
       },
-      phase: 'overload',
+      phase: 'accumulation',
       progressionEvents: [],
     });
     expect(result?.type).toBe('recovery');
@@ -280,7 +280,7 @@ describe('detectStagnation (acceptance tests 13-14)', () => {
         recentReadiness: [readiness(), readiness(), readiness()],
         daysWithLoggedWeightInLast7: 6,
       },
-      phase: 'overload',
+      phase: 'accumulation',
       progressionEvents: [],
     });
     expect(result).toBeNull();
@@ -358,7 +358,7 @@ describe('tendon guardrails (6.11)', () => {
         id: 's1',
         date: '2026-01-01',
         week: 3,
-        phase: 'overload',
+        phase: 'accumulation',
         day: 'tue',
         block: 'main',
         startedAt: '2026-01-01T08:00:00.000Z',

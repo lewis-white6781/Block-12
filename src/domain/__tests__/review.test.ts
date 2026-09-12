@@ -28,7 +28,7 @@ function mainSession(date: string, week: number, exerciseId: string, sets: SetLo
     id: `${date}:main`,
     date,
     week,
-    phase: 'baseline',
+    phase: 'reentry',
     day: 'mon',
     block: 'main',
     startedAt: `${date}T08:00:00.000Z`,
@@ -43,12 +43,12 @@ function longRunSession(date: string, week: number, sets: SetLog[]): SessionLog 
     id: `${date}:main`,
     date,
     week,
-    phase: 'marathonPeak',
+    phase: 'realization',
     day: 'sun',
     block: 'main',
     startedAt: `${date}T08:00:00.000Z`,
     completedAt: `${date}T11:00:00.000Z`,
-    exercises: [{ exerciseId: 'sun-long-run', sets }],
+    exercises: [{ exerciseId: 'sun-long-cardio', sets }],
     updatedAt: `${date}T11:00:00.000Z`,
   };
 }
@@ -68,16 +68,16 @@ describe('buildWeeklyReview', () => {
       progressionEvents: [],
       mobilityVariableForWeek: () => null,
     });
-    // A main session every day, GTG on Mon/Wed/Fri, and two later sessions —
-    // Wednesday's recovery run has no volume until week 3.
-    expect(review.sessionsPlanned).toEqual({ main: 7, am: 3, later: 2 });
+    // Six main sessions (Thursday is a rest day), GTG on Mon/Wed/Fri, and four
+    // later sessions: Monday cardio, Thursday and Sunday flexibility, Friday HIIT.
+    expect(review.sessionsPlanned).toEqual({ main: 6, am: 3, later: 4 });
     expect(review.sessionsCompleted.main).toBe(1);
-    expect(review.phase).toBe('baseline');
+    expect(review.phase).toBe('reentry');
   });
 
-  it('plans a third later session from week 3, when the recovery run starts', () => {
+  it('plans the same session count every week — nothing in v5.0 opts out of a week', () => {
     const review = buildWeeklyReview({
-      week: 3,
+      week: 6,
       settings: settings(),
       program,
       ladders,
@@ -86,7 +86,7 @@ describe('buildWeeklyReview', () => {
       progressionEvents: [],
       mobilityVariableForWeek: () => null,
     });
-    expect(review.sessionsPlanned.later).toBe(3);
+    expect(review.sessionsPlanned).toEqual({ main: 6, am: 3, later: 4 });
   });
 
   it('reports weight status null with no daily entries, and a value once there is enough data', () => {
@@ -130,17 +130,17 @@ describe('buildWeeklyReview', () => {
 
   it('carries next week\'s phase note and mobility variable, and is null for week 12', () => {
     const review = buildWeeklyReview({
-      week: 7,
+      week: 5,
       settings: settings(),
       program,
       ladders,
       sessionLogs: {},
       dailyEntries: {},
       progressionEvents: [],
-      mobilityVariableForWeek: (w) => (w === 8 ? 'half volume, re-measure' : null),
+      mobilityVariableForWeek: (w) => (w === 6 ? 'half volume, re-measure' : null),
     });
-    expect(review.nextWeek?.week).toBe(8);
-    // Week 8 closes wave 2 — a deload under the v4.0 wave model.
+    expect(review.nextWeek?.week).toBe(6);
+    // Week 6 is the block's one deload.
     expect(review.nextWeek?.phase).toBe('deload');
     expect(review.nextWeek?.mobilityVariable).toBe('half volume, re-measure');
 
@@ -214,30 +214,43 @@ describe('checkEndOfBlockTargets', () => {
       ...base,
       week12RetentionPct: (id: string) => (id === 'ring-dip' ? 96 : id === 'ring-pullup' ? 95 : null),
     });
-    expect(group(result, 'strength').items[0].status).toBe('met'); // pull-up
-    expect(group(result, 'strength').items[1].status).toBe('met'); // dip
+    expect(group(result, 'strength').items[0].status).toBe('met'); // dip
+    expect(group(result, 'strength').items[1].status).toBe('met'); // pull-up
+    expect(group(result, 'strength').items[2].status).toBe('unknown'); // hack squat: no data
 
     const declined = checkEndOfBlockTargets({ ...base, week12RetentionPct: () => 80 });
     expect(group(declined, 'strength').items[0].status).toBe('unmet');
   });
 
-  it('marks the long run met once one session totals two hours', () => {
+  it('marks the long cardio met once one session reaches 80 minutes', () => {
     const short = checkEndOfBlockTargets({
       ...base,
-      sessionLogs: {
-        s: longRunSession('2026-03-22', 11, Array.from({ length: 7 }, () => set({ minutes: 15, rpe: 3 }))),
-      },
+      sessionLogs: { s: longRunSession('2026-03-22', 11, [set({ minutes: 75, rpe: 3 })]) },
     });
-    expect(group(short, 'marathon').items[0].status).toBe('unmet');
+    expect(group(short, 'cardio').items[2].status).toBe('unmet');
 
     const long = checkEndOfBlockTargets({
       ...base,
-      sessionLogs: {
-        s: longRunSession('2026-03-22', 11, Array.from({ length: 8 }, () => set({ minutes: 15, rpe: 3 }))),
-      },
+      sessionLogs: { s: longRunSession('2026-03-22', 11, [set({ minutes: 85, rpe: 3 })]) },
     });
-    // 8 blocks x 15 min = 120.
-    expect(group(long, 'marathon').items[0].status).toBe('met');
+    expect(group(long, 'cardio').items[2].status).toBe('met');
+  });
+
+  it('marks the HIIT target met once eight intervals are logged in one session', () => {
+    const hiit = (n: number): SessionLog => ({
+      id: '2026-03-20:later',
+      date: '2026-03-20',
+      week: 11,
+      phase: 'realization',
+      day: 'fri',
+      block: 'later',
+      startedAt: '2026-03-20T17:00:00.000Z',
+      completedAt: '2026-03-20T17:30:00.000Z',
+      exercises: [{ exerciseId: 'fri-hiit-intervals', sets: Array.from({ length: n }, () => set({ seconds: 30, rpe: 9 })) }],
+      updatedAt: '2026-03-20T17:30:00.000Z',
+    });
+    expect(group(checkEndOfBlockTargets({ ...base, sessionLogs: { s: hiit(7) } }), 'cardio').items[1].status).toBe('unmet');
+    expect(group(checkEndOfBlockTargets({ ...base, sessionLogs: { s: hiit(8) } }), 'cardio').items[1].status).toBe('met');
   });
 
   it('marks flexibility met only when every measured chain moved the right way', () => {

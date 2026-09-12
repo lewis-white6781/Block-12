@@ -17,16 +17,16 @@ export interface SkillDefinition {
   ladderId?: string;
 }
 
-// v4.0: five headline skills, one per objective in SPEC-V4.0.md section 9.
-// Pistol is gone from the block entirely; the long run joins because a marathon
-// block whose headline numbers never mention running is lying about itself.
+// v5.0: five headline skills, one per objective in SPEC-V5.0.md section 9.
+// The long cardio session joins the four strength skills so the Progress
+// screen shows every objective the block sets, not only the gym ones.
 // Each must point at something still PRESCRIBED, or it can never gain a data point.
 export const SKILLS: SkillDefinition[] = [
   { id: 'frontLever', label: 'Front lever', exerciseId: 'fl-hold-primary', ladderId: 'frontLever' },
   { id: 'hspu', label: 'HSPU', exerciseId: 'hspu-primary', ladderId: 'hspu' },
   { id: 'pullup', label: 'Weighted pull-up', exerciseId: 'ring-pullup' },
   { id: 'dip', label: 'Weighted ring dip', exerciseId: 'ring-dip' },
-  { id: 'longRun', label: 'Long run', exerciseId: 'sun-long-run' },
+  { id: 'longCardio', label: 'Long cardio', exerciseId: 'sun-long-cardio' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -196,6 +196,10 @@ const ELBOW_EXERCISE_IDS = new Set([
   'cable-curl',
   'cable-triceps-ext',
   'overhead-triceps-ext',
+  // v5.0 additions
+  'fl-hold-banded',
+  'wall-curl',
+  'hammer-curl',
   // v1–v3, retired
   'fl-hard-iso',
   'fl-row',
@@ -215,6 +219,8 @@ const SHOULDER_EXERCISE_IDS = new Set([
   'incline-db-press',
   'lateral-raise',
   'lateral-raise-c',
+  // v5.0 additions
+  'rear-delt-fly',
   // v1–v3, retired
   'pike-hspu',
   'press-to-hs',
@@ -243,6 +249,12 @@ const ACHILLES_EXERCISE_IDS = new Set([
   'calf-raise-b',
   'calf-raise-c',
   'tibialis-raise',
+  // v5.0 additions — all three cardio sessions load the calf-Achilles chain
+  'mon-moderate-cardio',
+  'fri-hiit-warmup',
+  'fri-hiit-intervals',
+  'fri-hiit-cooldown',
+  'sun-long-cardio',
   // v1–v3, retired
   'sprints',
   'easy-run',
@@ -327,7 +339,7 @@ export function detectStagnation(params: {
   const { exercise, history, health, phase, progressionEvents } = params;
 
   if (!isFlat(history)) return null;
-  if (phase === 'deload' || phase === 'taper') return null;
+  if (phase === 'deload' || phase === 'consolidation') return null;
 
   if (!isHealthy(health)) {
     const reasons: string[] = [];

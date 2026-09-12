@@ -6,16 +6,15 @@
   --text: #e8edf2;
   --muted: #8a96a6;
 
-  /* phase accents — the signature. v4.0: three loading waves, so the hues cycle
-     cool -> warm within each wave and land on violet for the two deloads. */
-  --baseline: #6e8ba8; /* cool slate  */
-  --reinforce: #4fa88b; /* green       */
-  --overload: #c9a227; /* amber       */
+  /* phase accents — the signature. v5.0: one arc, so the hues run cool -> warm
+     from re-entry to realization, drop to violet for the week-6 deload, and
+     settle on blue for the week-12 consolidation. */
+  --reentry: #6e8ba8; /* cool slate  */
+  --accumulation: #4fa88b; /* green       */
   --deload: #7e7bb5; /* violet      */
-  --rebuild: #5f9fb0; /* teal        */
-  --peak: #d4553b; /* red-orange  */
-  --marathonPeak: #e07a2f; /* orange      */
-  --taper: #4f8fc0; /* blue        */
+  --intensification: #c9a227; /* amber       */
+  --realization: #d4553b; /* red-orange  */
+  --consolidation: #4f8fc0; /* blue        */
 
   --warn: #e0a030;
   --bad: #d4553b;

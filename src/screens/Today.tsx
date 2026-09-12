@@ -306,7 +306,7 @@ export default function Today() {
           </div>
         ))}
 
-        {/* Benchmarks are measured on the Sunday of weeks 1, 8 and 12. Sunday
+        {/* Benchmarks are measured on the Sunday of weeks 1 and 12. Sunday
             no longer has an AM block for this to displace, so it sits above the
             day's sessions rather than replacing one. */}
         {isSunday && isBenchmarkWeek(week) && (

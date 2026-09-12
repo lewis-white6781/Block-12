@@ -52,14 +52,12 @@ export function plannedSessions(week: number): Record<Block, number> {
 }
 
 export const PHASE_NOTES: Record<Phase, string> = {
-  baseline: 'Wave 1 opens. Establish honest RPE 8 numbers on every movement — everything after this is measured against them.',
-  reinforce: 'Same work, same numbers, better execution. Reinforce the baseline rather than beating it.',
-  overload: 'The heavy week of the wave. Sets go up, RPE goes up, technique does not slip.',
-  deload: 'End of a wave. Volume roughly halves and RPE drops to ~7 so tendons and legs catch up before the next one.',
-  rebuild: 'Wave opener. Rebuild to the previous wave\'s loading, no higher — the overload week is where you spend.',
-  peak: 'Highest gym loading of the block. After this, lifting gives ground to running.',
-  marathonPeak: 'Running peaks: the longest run of the block. Gym volume steps back to pay for it.',
-  taper: 'Reduce fatigue. Nothing to prove here — the race taper continues after week 12.',
+  reentry: 'Establish the post-break baseline around RPE 8. Honest numbers on every movement — everything after this is measured against them.',
+  accumulation: 'Sets and difficulty climb gradually. Add one variable at a time; never ROM and load together.',
+  deload: 'Mandatory. Volume down 40–50%, RPE 6–7, same exercises, no failure, no skill tests. Leave it eager to train hard again.',
+  intensification: 'Harder leverage and heavier loading. The bodyweight is lower now, so the same absolute load is real progress.',
+  realization: 'The highest-quality hard work of the block, without failure. Nothing new — express what was built.',
+  consolidation: 'Lower volume. Measure the six flexibility chains, compare every benchmark against week 1, and do not test to failure.',
 };
 
 export interface WeeklyReview {
@@ -318,12 +316,6 @@ function bestQualifyingSetInWeek(
   return best;
 }
 
-function anyQualifyingSetInWeek(sessionLogs: Record<string, SessionLog>, exerciseId: string, week: number): boolean {
-  return Object.values(sessionLogs).some(
-    (s) => s.week === week && s.exercises.some((log) => log.exerciseId === exerciseId && log.sets.some(isQualifyingSet)),
-  );
-}
-
 export function checkEndOfBlockTargets(input: {
   targetGroups: { id: string; label: string; items: string[] }[];
   sessionLogs: Record<string, SessionLog>;
@@ -347,7 +339,7 @@ export function checkEndOfBlockTargets(input: {
 
   /**
    * Longest total time spent on one exercise in a single session, in minutes.
-   * The long run is prescribed as N blocks of 15 minutes, so its duration is
+   * A cardio session may be logged as several blocks, so its duration is
    * the SUM of a session's sets, not the best of them.
    */
   function longestSessionMinutes(exerciseId: string): number | null {
@@ -359,6 +351,18 @@ export function checkEndOfBlockTargets(input: {
       if (total > 0 && (longest === null || total > longest)) longest = total;
     }
     return longest;
+  }
+
+  /** Most sets logged for one exercise in a single session — the HIIT interval count. */
+  function mostSetsInOneSession(exerciseId: string): number | null {
+    let most: number | null = null;
+    for (const session of Object.values(sessionLogs)) {
+      const log = session.exercises.find((e) => e.exerciseId === exerciseId);
+      if (!log) continue;
+      const n = log.sets.filter(isQualifyingSet).length;
+      if (n > 0 && (most === null || n > most)) most = n;
+    }
+    return most;
   }
 
   /** Did a week-12 best beat the same exercise's week-1 best, in its own unit? */
@@ -378,27 +382,32 @@ export function checkEndOfBlockTargets(input: {
       return currentWeightKg <= settings.targetWeightKg + 0.5 ? 'met' : 'unmet';
     }
 
-    // Front lever: "stronger open advanced tuck or one-leg hold"
+    // Front lever: hardest clean 5–8 s progression, open advanced tuck or beyond.
     if (id === 'frontLever' && index === 0) {
       const best = bestQualifyingSetInWeek(sessionLogs, 'fl-hold-primary', 12);
       if (!best) return 'unknown';
       const advanced = ['open-advanced-tuck', 'one-leg', 'alternating-one-leg', 'assisted-straddle', 'straddle', 'half-lay', 'lightly-assisted-full', 'full'];
       if (!best.variantId || !advanced.includes(best.variantId)) return 'unmet';
-      return (best.seconds ?? 0) >= 6 ? 'met' : 'unmet';
+      return (best.seconds ?? 0) >= 5 ? 'met' : 'unmet';
     }
 
-    // HSPU: "more ROM or reps in the primary pike HSPU"
+    // HSPU: primary pike HSPU and the wall-assisted secondary, both week 1 -> 12.
     if (id === 'hspu' && index === 0) return improvedSinceWeek1('hspu-primary');
+    if (id === 'hspu' && index === 1) return improvedSinceWeek1('hspu-secondary');
 
-    // Strength: the two heavy exposures the block promises only to MAINTAIN
-    // through a cut, not to improve. 95% of the block best is "maintained".
+    // Strength: the block's promise through a cut is to HOLD these. 95% of the
+    // block best is 'held'.
     if (id === 'strength' && index === 0) {
+      const dip = input.week12RetentionPct('ring-dip');
+      return dip === null ? 'unknown' : dip >= 95 ? 'met' : 'unmet';
+    }
+    if (id === 'strength' && index === 1) {
       const pullup = input.week12RetentionPct('ring-pullup');
       return pullup === null ? 'unknown' : pullup >= 95 ? 'met' : 'unmet';
     }
-    if (id === 'strength' && index === 1) {
-      const dip = input.week12RetentionPct('ring-dip');
-      return dip === null ? 'unknown' : dip >= 95 ? 'met' : 'unmet';
+    if (id === 'strength' && index === 2) {
+      const hack = input.week12RetentionPct('hack-squat');
+      return hack === null ? 'unknown' : hack >= 95 ? 'met' : 'unmet';
     }
 
     // Core: the three movements with a ladder behind them.
@@ -424,21 +433,19 @@ export function checkEndOfBlockTargets(input: {
       return improved ? 'met' : 'unmet';
     }
 
-    // Marathon: "long run built to 2+ hours"
-    if (id === 'marathon' && index === 0) {
-      const longest = longestSessionMinutes('sun-long-run');
-      if (longest === null) return 'unknown';
-      return longest >= 120 ? 'met' : 'unmet';
+    // Cardio: the three sessions' peak volumes from SPEC-V5.0.md section 4.
+    if (id === 'cardio' && index === 0) {
+      const longest = longestSessionMinutes('mon-moderate-cardio');
+      return longest === null ? 'unknown' : longest >= 30 ? 'met' : 'unmet';
     }
-    // Marathon: "comfortable 5–6 run weekly schedule" — met when week 12 was
-    // actually run, not merely prescribed.
-    if (id === 'marathon' && index === 1) {
-      const runIds = ['tue-threshold', 'thu-easy-run', 'sat-easy-run', 'sun-long-run'];
-      const run = runIds.filter((runId) => anyQualifyingSetInWeek(sessionLogs, runId, 12)).length;
-      if (run === 0) return 'unknown';
-      return run >= 4 ? 'met' : 'unmet';
+    if (id === 'cardio' && index === 1) {
+      const most = mostSetsInOneSession('fri-hiit-intervals');
+      return most === null ? 'unknown' : most >= 8 ? 'met' : 'unmet';
     }
-
+    if (id === 'cardio' && index === 2) {
+      const longest = longestSessionMinutes('sun-long-cardio');
+      return longest === null ? 'unknown' : longest >= 80 ? 'met' : 'unmet';
+    }
     return 'unknown';
   }
 

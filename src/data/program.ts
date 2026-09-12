@@ -1,56 +1,55 @@
-// THE 12-WEEK HYBRID MARATHON BLOCK — SPEC-V4.0.md sections 2, 4 and the
-// per-day tables.
+// THE 12-WEEK CALISTHENICS-PRIORITY CUT — SPEC-V5.0.md sections 2, 4 and the
+// per-day tables. Push / Pull / Legs / Rest / Push / Pull / Rest.
 //
-// Transcribed exactly. Do not invent, round, or paraphrase any prescription.
-// Every weekly sets/RPE table in the spec is authored here one Prescription per
-// row, so a week is never inferred — except where the spec itself groups weeks
-// ("Weeks 1–2", "Weeks 5–7", "normal weeks / weeks 4, 8, 12"), which is
-// reproduced as a single grouped entry.
+// Transcribed exactly from updatedblock20.md. Do not invent, round, or
+// paraphrase any prescription. Every weekly sets/RPE table is authored here one
+// Prescription per row, so a week is never inferred. Where the plan states one
+// table and then says "progress exactly as Monday" or "same strict rules as
+// Monday", the table is a shared constant rather than a retyped copy, so the
+// two cannot drift apart.
 //
-// Two conventions worth knowing before editing:
+// Conventions worth knowing before editing:
 //
 //   - `sets: 0` means "not prescribed this week" and `exercisesFor` drops it.
-//     It has to be written out, because resolvePrescription's nearest-earlier
-//     fallback would otherwise fill the gap with a neighbouring week's numbers.
+//     Nothing in v5.0 needs it — every exercise runs all twelve weeks — but the
+//     mechanism stays for the next block that does.
+//   - A range on a field the type stores as ONE number (sets, minutes) takes
+//     the high end and records the range in `note`. Reps, seconds and RPE
+//     ranges are native (`repsLow`/`repsHigh` etc.) and need no note.
 //   - The exercises are FIXED across the block. Reps, hold durations and
-//     exercise selection do not change; sets, RPE, running volume and
+//     exercise selection do not change; sets, RPE, cardio duration and
 //     flexibility volume do. Load, leverage, ROM and band assistance are the
-//     athlete's dials for hitting the prescribed RPE, which is why so many
-//     prescriptions carry a constant rep count and a moving RPE.
-import type { Block, DayId, Exercise } from '../domain/types';
+//     athlete's dials for hitting the prescribed RPE.
+import type { Block, DayId, Exercise, Prescription } from '../domain/types';
 
-/**
- * The name of each session. v4.0 needs one per (day, block) rather than one per
- * day: Wednesday alone runs a grease-the-groove block, a full-body lift and a
- * recovery run, and calling all three "Wednesday" helped nobody.
- */
+/** The name of each session, one per (day, block). */
 export const sessionTitles: Record<DayId, Partial<Record<Block, string>>> = {
   mon: {
     am: 'Handstand grease the groove',
-    main: 'Full Body A — HSPU & heavy dip',
+    main: 'Push A — HSPU priority',
+    later: 'Moderate continuous cardio',
   },
   tue: {
-    main: 'Quality run — threshold',
-    later: 'Flexibility A — pancake, middle split, shoulders',
+    main: 'Pull A — primary front lever',
   },
   wed: {
     am: 'Front lever grease the groove',
-    main: 'Full Body B — front lever, heavy pull, lower body',
-    later: 'Recovery run',
+    main: 'Legs',
   },
   thu: {
-    main: 'Easy run',
+    later: 'Flexibility A — pancake, middle split, shoulders',
   },
   fri: {
-    am: 'Mixed grease the groove',
-    main: 'Full Body C — mixed calisthenics & physique',
+    am: 'Handstand grease the groove',
+    main: 'Push B — weighted dip priority',
+    later: 'HIIT',
   },
   sat: {
-    main: 'Easy run + strides',
+    main: 'Pull B — weighted pull + FL support',
   },
   sun: {
-    main: 'Long run',
-    later: 'Flexibility B — front split, pike, bridge',
+    main: 'Long low-intensity cardio',
+    later: 'Flexibility B — front split, pike, bridge, ankle',
   },
 };
 
@@ -60,28 +59,42 @@ export const sessionTitles: Record<DayId, Partial<Record<Block, string>>> = {
  * header, the Progress exercise picker.
  */
 export const dayTitles: Record<DayId, string> = {
-  mon: 'Full Body A',
-  tue: 'Quality run',
-  wed: 'Full Body B',
-  thu: 'Easy run',
-  fri: 'Full Body C',
-  sat: 'Easy run + strides',
-  sun: 'Long run',
+  mon: 'Push A',
+  tue: 'Pull A',
+  wed: 'Legs',
+  thu: 'Rest + Flexibility A',
+  fri: 'Push B',
+  sat: 'Pull B',
+  sun: 'Active recovery',
 };
 
-/** Every week, for prescriptions the plan holds constant across the block. */
-const ALL_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+// ---------------------------------------------------------------------------
+// Weekly tables
+// ---------------------------------------------------------------------------
 
-/** The three deload weeks, which several accessories single out by name. */
-const DELOAD_WEEKS = [4, 8, 12];
-const NORMAL_WEEKS = [1, 2, 3, 5, 6, 7, 9, 10, 11];
+/** One row of a weekly sets/RPE table: [sets, rpeLow, rpeHigh, note?]. */
+type WeekRow = [sets: number, rpeLow: number, rpeHigh: number, note?: string];
+
+/** Expands a 12-row table into one Prescription per week, plus constant fields. */
+function weekly(rows: WeekRow[], fields: Omit<Prescription, 'weeks' | 'sets' | 'rpeLow' | 'rpeHigh' | 'note'>): Prescription[] {
+  if (rows.length !== 12) throw new Error(`weekly(): expected 12 rows, got ${rows.length}`);
+  return rows.map(([sets, rpeLow, rpeHigh, note], i) => ({
+    weeks: [i + 1],
+    sets,
+    rpeLow,
+    rpeHigh,
+    ...fields,
+    ...(note ? { note } : {}),
+  }));
+}
 
 /**
- * The grease-the-groove rounds table. Every GTG item in the block shares it —
- * one round is the whole list, so "sets" on each item IS the round count.
- * SPEC-V4.0.md: 2, 2, 3, 1, 3, 3, 3, 2, 3, 3, 2, 1.
+ * The grease-the-groove rounds table, shared by all three GTG blocks — one
+ * round is the whole list, so "sets" on each item IS the round count.
+ * SPEC-V5.0.md: 2, 2, 2, 3, 3, 1, 2, 2, 3, 3, 2, 1–2.
  */
-const GTG_ROUNDS = [2, 2, 3, 1, 3, 3, 3, 2, 3, 3, 2, 1];
+const GTG_ROUNDS = [2, 2, 2, 3, 3, 1, 2, 2, 3, 3, 2, 2];
+const GTG_NOTES: Record<number, string> = { 12: '1–2 rounds' };
 
 function gtgPrescriptions(fields: {
   repsLow?: number;
@@ -91,17 +104,81 @@ function gtgPrescriptions(fields: {
   rpeLow?: number;
   rpeHigh?: number;
   note?: string;
-}) {
-  return GTG_ROUNDS.map((sets, i) => ({ weeks: [i + 1], sets, ...fields }));
+}): Prescription[] {
+  return GTG_ROUNDS.map((sets, i) => ({
+    weeks: [i + 1],
+    sets,
+    ...fields,
+    ...(GTG_NOTES[i + 1] ? { note: GTG_NOTES[i + 1] } : {}),
+  }));
 }
 
 /**
- * The two flexibility sessions each prescribe ONE sets-and-RPE table that every
- * item in the session follows — so the table lives here once, indexed by week,
- * rather than being retyped six times per session.
+ * Weighted ring dip — the same table on Monday (Push A) and Friday (Push B).
+ * The plan states it once and says "Progress exactly as Monday".
+ */
+const RING_DIP: WeekRow[] = [
+  [4, 8, 8],
+  [4, 8, 8],
+  [4, 8, 8],
+  [5, 8.5, 8.5],
+  [5, 8.5, 8.5],
+  [2, 6, 7],
+  [4, 8, 8],
+  [4, 8, 8],
+  [5, 8.5, 8.5],
+  [5, 8.5, 8.5],
+  [4, 8.5, 8.5],
+  [3, 7, 8, '2–3 sets'],
+];
+
+/**
+ * The upper-body accessory table: strict lateral raise (both days), overhead
+ * triceps extension, rear-delt fly, back-to-wall curl, triceps pressdown and
+ * hammer curl all carry this exact table in the plan.
+ */
+const ACCESSORY: WeekRow[] = [
+  [3, 8, 8],
+  [3, 8, 8],
+  [3, 8.5, 8.5],
+  [4, 8.5, 8.5],
+  [4, 9, 9],
+  [2, 6, 7],
+  [3, 8, 8],
+  [3, 8.5, 8.5],
+  [4, 8.5, 8.5],
+  [4, 9, 9],
+  [3, 9, 9],
+  [2, 7, 8],
+];
+
+/**
+ * The lower-body / core table: Bulgarian split squat, Nordic curl, seated calf
+ * raise, tibialis raise and windshield wiper all carry this exact table.
+ */
+const LOWER: WeekRow[] = [
+  [3, 8, 8],
+  [3, 8, 8],
+  [3, 8, 8],
+  [4, 8.5, 8.5],
+  [4, 8.5, 8.5],
+  [2, 6, 6],
+  [3, 8, 8],
+  [3, 8, 8],
+  [4, 8.5, 8.5],
+  [4, 8.5, 8.5],
+  [3, 8.5, 8.5],
+  [2, 7, 7],
+];
+
+/**
+ * Flexibility A prescribes TWO set counts per week — one for the loaded
+ * movements (Cossack, pancake good morning, lift-off) and one for the static
+ * holds (contract-relax, middle split, bench shoulder stretch) — against a
+ * single RPE. Flexibility B prescribes one set count for everything.
  *
- * Flexibility RPE is the 5–8 scale (SPEC-V4.0.md section 1); it never reaches
- * 9–10, and for this block should almost always sit at 6–7.
+ * Flexibility RPE is the 5–8 scale (SPEC-V5.0.md section 2); 8+ is not
+ * required anywhere in the block.
  */
 interface FlexWeek {
   sets: number;
@@ -110,37 +187,52 @@ interface FlexWeek {
   note?: string;
 }
 
-// Flexibility A (Tuesday): 2,2,3,1,2,3,3,1–2,3,3,2,1–2.
-const FLEX_A_WEEKS: FlexWeek[] = [
+// Flexibility A — loaded movements: 2,2,3,3,3,1–2,2,3,3,3,3,1–2 + benchmark.
+const FLEX_A_LOADED: FlexWeek[] = [
   { sets: 2, rpeLow: 6, rpeHigh: 6 },
-  { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
-  { sets: 3, rpeLow: 7, rpeHigh: 7 },
-  { sets: 1, rpeLow: 5, rpeHigh: 6 },
-  { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
+  { sets: 2, rpeLow: 6, rpeHigh: 6.5 },
+  { sets: 3, rpeLow: 6.5, rpeHigh: 6.5 },
   { sets: 3, rpeLow: 7, rpeHigh: 7 },
   { sets: 3, rpeLow: 7, rpeHigh: 7 },
   { sets: 2, rpeLow: 5, rpeHigh: 6, note: '1–2 sets' },
+  { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7 },
   { sets: 3, rpeLow: 7, rpeHigh: 7 },
   { sets: 3, rpeLow: 7, rpeHigh: 7.5 },
-  { sets: 2, rpeLow: 7, rpeHigh: 7 },
-  { sets: 2, rpeLow: 6, rpeHigh: 6, note: '1–2 sets' },
+  { sets: 3, rpeLow: 7, rpeHigh: 7.5 },
+  { sets: 2, rpeLow: 6, rpeHigh: 6, note: '1–2 sets + benchmark' },
 ];
 
-// Flexibility B (Sunday): lower volume by design — this must not become a
-// second hard lower-body session on top of the long run.
-const FLEX_B_WEEKS: FlexWeek[] = [
+// Flexibility A — static holds: 2,2,2,2,3,1–2,2,2,3,3,2,1–2 + benchmark.
+const FLEX_A_STATIC: FlexWeek[] = [
   { sets: 2, rpeLow: 6, rpeHigh: 6 },
-  { sets: 2, rpeLow: 6, rpeHigh: 6 },
-  { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
-  { sets: 1, rpeLow: 5, rpeHigh: 5 },
-  { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
+  { sets: 2, rpeLow: 6, rpeHigh: 6.5 },
   { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
   { sets: 2, rpeLow: 7, rpeHigh: 7 },
-  { sets: 1, rpeLow: 5, rpeHigh: 5 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7 },
+  { sets: 2, rpeLow: 5, rpeHigh: 6, note: '1–2 sets' },
   { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
+  { sets: 2, rpeLow: 7, rpeHigh: 7 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7.5 },
+  { sets: 2, rpeLow: 7, rpeHigh: 7.5 },
+  { sets: 2, rpeLow: 6, rpeHigh: 6, note: '1–2 sets + benchmark' },
+];
+
+// Flexibility B — sets each: 2,2,2,3,3,1,2,2–3,3,3,2–3,1–2 + benchmark.
+const FLEX_B_WEEKS: FlexWeek[] = [
+  { sets: 2, rpeLow: 6, rpeHigh: 6 },
+  { sets: 2, rpeLow: 6, rpeHigh: 6.5 },
   { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
-  { sets: 2, rpeLow: 6, rpeHigh: 6, note: '1–2 sets' },
+  { sets: 3, rpeLow: 7, rpeHigh: 7 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7 },
   { sets: 1, rpeLow: 5, rpeHigh: 6 },
+  { sets: 2, rpeLow: 6.5, rpeHigh: 6.5 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7, note: '2–3 sets' },
+  { sets: 3, rpeLow: 7, rpeHigh: 7 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7.5 },
+  { sets: 3, rpeLow: 7, rpeHigh: 7.5, note: '2–3 sets' },
+  { sets: 2, rpeLow: 6, rpeHigh: 6, note: '1–2 sets + benchmark' },
 ];
 
 interface FlexItem {
@@ -149,58 +241,70 @@ interface FlexItem {
   order: number;
   metric: 'hold' | 'reps' | 'weightedReps';
   ladderId?: string;
-  reps?: number;
-  seconds?: number;
+  repsLow?: number;
+  repsHigh?: number;
+  secLow?: number;
+  secHigh?: number;
   perSide?: boolean;
-  note?: string;
+  cues?: string[];
+  overload: string; // the plan's overload rule for this item
 }
 
-/** Builds one flexibility exercise against a session's shared weekly table. */
+/** Builds one flexibility exercise against a session's weekly table. */
 function flexibilityExercise(day: DayId, weeks: FlexWeek[]) {
-  return (item: FlexItem): Exercise => ({
-    id: item.id,
-    name: item.name,
-    day,
-    block: 'later',
-    order: item.order,
-    metric: item.metric,
-    ladderId: item.ladderId,
-    tracked: true,
-    rpeScale: 'stretch',
-    cues: [
-      item.seconds !== undefined
-        ? `${item.seconds} s${item.perSide ? ' per side' : ''}`
-        : `${item.reps} reps${item.perSide ? ' per side' : ''}`,
-      ...(item.note ? [item.note] : []),
-      'progress ROM → control → load, never pain tolerance',
-    ],
-    progressionLadder: ['greater ROM', 'more control', 'added load'],
-    stopRules: [
-      'spine compensated excessively',
-      'joint felt pinched',
-      'active control disappeared',
-    ],
-    prescriptions: weeks.map((week, i) => ({
-      weeks: [i + 1],
-      sets: week.sets,
-      ...(item.reps !== undefined ? { repsLow: item.reps, repsHigh: item.reps } : {}),
-      ...(item.seconds !== undefined ? { secLow: item.seconds, secHigh: item.seconds } : {}),
-      rpeLow: week.rpeLow,
-      rpeHigh: week.rpeHigh,
-      ...(item.perSide ? { perSide: true } : {}),
-      ...(week.note ? { note: week.note } : {}),
-    })),
-  });
+  return (item: FlexItem): Exercise => {
+    const dose =
+      item.secLow !== undefined
+        ? item.secHigh !== undefined && item.secHigh !== item.secLow
+          ? `${item.secLow}–${item.secHigh} s`
+          : `${item.secLow} s`
+        : item.repsHigh !== undefined && item.repsHigh !== item.repsLow
+          ? `${item.repsLow}–${item.repsHigh} reps`
+          : `${item.repsLow} reps`;
+    return {
+      id: item.id,
+      name: item.name,
+      day,
+      block: 'later',
+      order: item.order,
+      metric: item.metric,
+      ladderId: item.ladderId,
+      tracked: true,
+      rpeScale: 'stretch',
+      cues: [
+        `${dose}${item.perSide ? ' per side' : ''}`,
+        ...(item.cues ?? []),
+        'progress ROM → control → load, never pain tolerance',
+      ],
+      progressionLadder: [item.overload],
+      stopRules: ['spine compensated excessively', 'joint felt pinched', 'active control disappeared'],
+      prescriptions: weeks.map((week, i) => ({
+        weeks: [i + 1],
+        sets: week.sets,
+        ...(item.repsLow !== undefined ? { repsLow: item.repsLow, repsHigh: item.repsHigh ?? item.repsLow } : {}),
+        ...(item.secLow !== undefined ? { secLow: item.secLow, secHigh: item.secHigh ?? item.secLow } : {}),
+        rpeLow: week.rpeLow,
+        rpeHigh: week.rpeHigh,
+        ...(item.perSide ? { perSide: true } : {}),
+        ...(week.note ? { note: week.note } : {}),
+      })),
+    };
+  };
 }
+
+// The plan's "technical failure" definitions for calisthenics skill work —
+// the set ends when the standard breaks, not when gravity wins.
+const FL_STOP = ['hips dropped below shoulder line', 'scapular position collapsed', 'elbows bent'];
+const HSPU_STOP = ['ROM shortened', 'line collapsed', 'needed momentum'];
+const DIP_STOP = ['lost stable depth', 'lost full lockout', 'rings drifted or bounced'];
 
 export const program: Exercise[] = [
   // ==========================================================================
   // MONDAY AM — HANDSTAND GREASE THE GROOVE
   //
-  // Ideally 6+ hours before lifting. The goal is motor learning and position
-  // familiarity, not fatigue — everything here is RPE 4–5 and toe pulls never
-  // exceed RPE 5. The objective is repeated successful balance corrections over
-  // months, not one exhausting handstand attempt.
+  // ~6–10 min, RPE 4–5 maximum, ideally 4–6+ hours before Push A. Progress by
+  // better wall line, smaller toe contact, cleaner catches — never by making it
+  // exhausting. Stop while attempts still feel crisp.
   // ==========================================================================
   {
     id: 'mon-am-wrist-lean',
@@ -211,9 +315,9 @@ export const program: Exercise[] = [
     metric: 'timeOnly',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['20 s @ RPE 4', 'progress shoulder travel beyond the wrist'],
-    progressionLadder: [],
-    stopRules: [],
+    cues: ['20 s @ RPE 4', 'gentle load into the wrists before any handstand work'],
+    progressionLadder: ['greater wrist extension', 'more load through the palm'],
+    stopRules: ['wrist pain rather than stretch'],
     prescriptions: gtgPrescriptions({ secLow: 20, secHigh: 20, rpeLow: 4, rpeHigh: 4 }),
   },
   {
@@ -226,9 +330,9 @@ export const program: Exercise[] = [
     ladderId: 'handstandBalance',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['20 s @ RPE 4', 'elbows locked, shoulders elevated, ribs controlled'],
-    progressionLadder: ['improving line', 'more work at the same RPE'],
-    stopRules: [],
+    cues: ['20 s @ RPE 4', 'ribs in, glutes on, push tall through the shoulders'],
+    progressionLadder: ['better wall line', 'smaller toe contact'],
+    stopRules: ['line collapsed', 'shoulders sagged'],
     prescriptions: gtgPrescriptions({ secLow: 20, secHigh: 20, rpeLow: 4, rpeHigh: 4 }),
   },
   {
@@ -241,9 +345,9 @@ export const program: Exercise[] = [
     ladderId: 'handstandBalance',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['2 attempts', 'never above RPE 5', 'stop each attempt while the shape is still good'],
-    progressionLadder: ['losing assistance', 'improving line'],
-    stopRules: [],
+    cues: ['2 controlled attempts', 'pull the toes off the wall and hold the balance'],
+    progressionLadder: ['cleaner 1–3 s catches', 'repeated 3–5 s catches'],
+    stopRules: ['attempts stopped feeling crisp'],
     prescriptions: gtgPrescriptions({ repsLow: 2, repsHigh: 2, rpeLow: 4, rpeHigh: 5 }),
   },
   {
@@ -255,14 +359,14 @@ export const program: Exercise[] = [
     metric: 'reps',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['6 controlled shifts'],
-    progressionLadder: [],
-    stopRules: [],
-    prescriptions: gtgPrescriptions({ repsLow: 6, repsHigh: 6, rpeLow: 4, rpeHigh: 4 }),
+    cues: ['6 reps', 'shift weight into the fingertips and back without the line moving'],
+    progressionLadder: ['better fingertip correction'],
+    stopRules: ['line moved with the shift'],
+    prescriptions: gtgPrescriptions({ repsLow: 6, repsHigh: 6, rpeLow: 4, rpeHigh: 5 }),
   },
   {
     id: 'mon-am-max-elevation-hold',
-    name: 'Maximum-elevation handstand hold',
+    name: 'Elevated / scapular handstand hold',
     day: 'mon',
     block: 'am',
     order: 5,
@@ -270,14 +374,14 @@ export const program: Exercise[] = [
     ladderId: 'handstandBalance',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['10 s'],
-    progressionLadder: ['improving line'],
-    stopRules: [],
+    cues: ['10 s', 'push as tall as possible through the shoulders'],
+    progressionLadder: ['greater elevation', 'longer clean hold'],
+    stopRules: ['elevation lost'],
     prescriptions: gtgPrescriptions({ secLow: 10, secHigh: 10, rpeLow: 4, rpeHigh: 5 }),
   },
 
   // ==========================================================================
-  // MONDAY — FULL BODY A: HSPU + heavy dip emphasis
+  // MONDAY — PUSH A: HSPU PRIORITY
   // ==========================================================================
   {
     id: 'hspu-primary',
@@ -288,38 +392,36 @@ export const program: Exercise[] = [
     metric: 'weightedReps',
     ladderId: 'hspu',
     tracked: true,
-    // "Rest: 4–5 minutes" — the plan's only four-figure rest, and the reason
-    // this movement holds its quality across five sets.
     restSeconds: 270,
-    cues: ['always 5 reps per set', 'rest 4–5 min'],
-    // The plan's own ordered progression: line, then ROM, then elevation, then
-    // leverage, and load only when nothing else is left.
+    cues: ['4–6 reps', 'rest 4–5 min', 'primary concentric HSPU strength'],
+    // "When all sets reach 6 technically excellent reps below the target RPE,
+    // progress one variable." Never increase ROM and load at the same time.
     progressionLadder: [
-      'better line',
-      'greater ROM',
-      'greater foot elevation',
-      'harder leverage',
-      'additional load',
+      'increase deficit slightly',
+      'raise feet',
+      'shift shoulders farther over hands',
+      'progress toward partial-ROM wall HSPU',
     ],
-    stopRules: ['depth reduced from the first rep', 'elbows flared out of position', 'needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [12], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7.5, rpeHigh: 7.5 },
-    ],
+    stopRules: HSPU_STOP,
+    prescriptions: weekly(
+      [
+        [4, 8, 8],
+        [4, 8, 8],
+        [4, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [3, 6, 7, '2–3 sets'],
+        [4, 8, 8],
+        [4, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [4, 8.5, 9],
+        [3, 7, 8, '2–3 sets'],
+      ],
+      { repsLow: 4, repsHigh: 6 },
+    ),
   },
   {
-    // Carried over from the pre-v4 block with its id intact: same movement,
-    // same role as the primary dip exposure, so its chart spans both blocks.
     id: 'ring-dip',
     name: 'Weighted ring dip',
     day: 'mon',
@@ -327,219 +429,263 @@ export const program: Exercise[] = [
     order: 2,
     metric: 'weightedReps',
     tracked: true,
-    cues: ['always 5 reps per set', 'controlled depth and ring stability', 'no failed reps'],
-    progressionLadder: ['added load', 'greater ROM', 'more reps at the same RPE'],
-    stopRules: ['depth reduced from the first rep', 'rings unstable', 'needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [12], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7.5, rpeHigh: 7.5 },
-    ],
+    restSeconds: 270,
+    cues: ['4–6 reps', 'rest 4–5 min', 'controlled depth, stable rings, no bounce, full lockout'],
+    // "When every work set reaches 6 reps at or below target RPE, add the
+    // smallest practical load increase — usually ~1.25–2.5 kg total."
+    progressionLadder: ['6 clean reps on every set', 'add 1.25–2.5 kg'],
+    stopRules: DIP_STOP,
+    prescriptions: weekly(RING_DIP, { repsLow: 4, repsHigh: 6 }),
   },
   {
-    id: 'fl-hold-primary',
-    name: 'Primary front lever hold',
+    id: 'lateral-raise',
+    name: 'Strict dumbbell lateral raise',
     day: 'mon',
     block: 'main',
     order: 3,
-    metric: 'hold',
-    ladderId: 'frontLever',
+    metric: 'weightedReps',
     tracked: true,
-    cues: [
-      'always 6 seconds per set',
-      'choose the progression that makes six perfect seconds match the target RPE',
-      'the hold ends when the position deteriorates, not when gravity wins',
-    ],
-    progressionLadder: ['harder leverage', 'less assistance', 'cleaner line'],
-    stopRules: ['hips sagged', 'line changed substantially', 'position collapsed'],
-    prescriptions: [
-      { weeks: [1], sets: 3, secLow: 6, secHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, secLow: 6, secHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, secLow: 6, secHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, secLow: 6, secHigh: 6, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, secLow: 6, secHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 4, secLow: 6, secHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 4, secLow: 6, secHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, secLow: 6, secHigh: 6, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 4, secLow: 6, secHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 4, secLow: 6, secHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 3, secLow: 6, secHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [12], sets: 2, secLow: 6, secHigh: 6, rpeLow: 7.5, rpeHigh: 7.5 },
-    ],
+    restSeconds: 150,
+    cues: ['10–15 reps', 'rest 2–3 min', 'no leg drive, minimal torso movement, no shrug, controlled eccentric'],
+    // "Reach 15 clean reps before increasing weight. If the dumbbell jump is
+    // large, allow reps to return to ~10–12."
+    progressionLadder: ['15 clean reps', 'increase weight, reps return to 10–12'],
+    stopRules: ['leg drive appeared', 'shrugged', 'torso swung'],
+    prescriptions: weekly(ACCESSORY, { repsLow: 10, repsHigh: 15 }),
   },
   {
-    id: 'ffe-split-squat',
-    name: 'Front-foot-elevated split squat',
+    id: 'overhead-triceps-ext',
+    name: 'Overhead cable triceps extension',
     day: 'mon',
     block: 'main',
     order: 4,
     metric: 'weightedReps',
     tracked: true,
-    cues: [
-      'always 8 reps per leg',
-      'a mobility-strength movement, not a maximal leg exercise',
-      'maximum controlled dorsiflexion, deep hip, upright torso, stable foot',
-    ],
-    progressionLadder: ['greater ROM', 'added load'],
-    stopRules: ['heel lifted', 'torso collapsed forward'],
-    prescriptions: [
-      { weeks: [1, 2], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7, perSide: true },
-      { weeks: [3], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 7.5, rpeHigh: 7.5, perSide: true },
-      { weeks: [4], sets: 1, repsLow: 8, repsHigh: 8, rpeLow: 6, rpeHigh: 6, perSide: true },
-      { weeks: [5, 6], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7.5, rpeHigh: 7.5, perSide: true },
-      { weeks: [7], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [8], sets: 1, repsLow: 8, repsHigh: 8, rpeLow: 6, rpeHigh: 6, perSide: true },
-      { weeks: [9, 10], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7.5, rpeHigh: 7.5, perSide: true },
-      { weeks: [11], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7, perSide: true },
-      { weeks: [12], sets: 1, repsLow: 8, repsHigh: 8, rpeLow: 6, rpeHigh: 6, perSide: true },
-    ],
-  },
-  {
-    id: 'chest-supported-row',
-    name: 'Chest-supported row',
-    day: 'mon',
-    block: 'main',
-    order: 5,
-    metric: 'weightedReps',
-    tracked: true,
-    cues: ['always 8 reps'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 8, repsHigh: 8, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 4, repsLow: 8, repsHigh: 8, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 4, repsLow: 8, repsHigh: 8, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7 },
-    ],
+    restSeconds: 150,
+    cues: ['8–12 reps', 'rest 2–3 min', 'strict elbow position'],
+    progressionLadder: ['12 reps on all work sets with strict elbows', 'increase the stack by the smallest increment'],
+    stopRules: ['elbows flared', 'shoulders took over'],
+    prescriptions: weekly(ACCESSORY, { repsLow: 8, repsHigh: 12 }),
   },
   {
     id: 'dragon-flag',
     name: 'Dragon flag',
     day: 'mon',
     block: 'main',
-    order: 6,
+    order: 5,
     metric: 'reps',
     ladderId: 'dragonFlag',
     tracked: true,
-    coreFunction: 'anti-extension',
-    cues: ['always 5 reps', '3-second eccentric', 'no hip folding', 'maintain a long rigid body'],
-    progressionLadder: ['harder leverage', 'slower eccentric', 'added load'],
-    stopRules: ['hips folded', 'lost the long body line'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
+    restSeconds: 240,
+    coreFunction: 'long-lever anti-extension',
+    cues: ['4–6 reps', 'rest 3–5 min', '~3 s eccentric', 'lats anchor the body; this is core work, not a pull'],
+    progressionLadder: [
+      'bent-knee / shorter lever',
+      'single-leg',
+      'full eccentric',
+      'full concentric + eccentric',
+      'slower full reps',
+      'small external load',
     ],
+    stopRules: ['lumbar arched', 'body piked at the hips', 'eccentric sped up'],
+    prescriptions: weekly(
+      [
+        [3, 8, 8],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [2, 6, 7],
+        [3, 8, 8],
+        [3, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [3, 8.5, 8.5],
+        [2, 7, 8],
+      ],
+      { repsLow: 4, repsHigh: 6 },
+    ),
   },
-  // 7A / 7B share one sets-and-RPE table and are alternated. Rest 90–120 s.
+
+  // ==========================================================================
+  // MONDAY LATER — MODERATE CONTINUOUS CARDIO
+  //
+  // The 20–30 minute faster continuous session, RPE 5.5–6.5: clearly above easy
+  // Zone 2, conversation limited to short phrases, effort still controlled.
+  // After Push A or 4–6+ hours later, never before lifting. Bike, elliptical,
+  // rower or incline treadmill preferred to spare Wednesday's legs. Progress
+  // DURATION first, not speed.
+  // ==========================================================================
   {
-    id: 'lateral-raise',
-    name: 'Dumbbell lateral raise (7A)',
+    id: 'mon-moderate-cardio',
+    name: 'Moderate continuous cardio',
     day: 'mon',
-    block: 'main',
-    order: 7,
-    metric: 'weightedReps',
+    block: 'later',
+    order: 1,
+    metric: 'runInterval',
     tracked: true,
-    supersetId: 'mon-7',
-    restSeconds: 105,
-    cues: ['always 12 reps', 'alternate with 7B', 'rest 90–120 s'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [4], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [8], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [10], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [11], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
+    rpeScale: 'run',
+    cues: [
+      '5 min easy warm-up @ RPE 2–3, then the prescribed continuous work, then 3–5 min easy cooldown',
+      'bike, elliptical, rower or incline treadmill preferred; an easy/moderate run if you like',
+      'breathing is harder and talk is short phrases, but the effort stays controlled',
     ],
-  },
-  {
-    id: 'incline-curl',
-    name: 'Incline dumbbell curl (7B)',
-    day: 'mon',
-    block: 'main',
-    order: 8,
-    metric: 'weightedReps',
-    tracked: true,
-    supersetId: 'mon-7',
-    restSeconds: 105,
-    cues: ['always 10 reps', 'alternate with 7A', 'rest 90–120 s'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['needed momentum'],
+    progressionLadder: ['longer duration at the same RPE', 'more output at the same RPE'],
+    stopRules: ['effort drifted above the prescribed RPE'],
     prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [4], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [8], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [10], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [11], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-    ],
-  },
-  {
-    id: 'suitcase-carry',
-    name: 'Suitcase carry',
-    day: 'mon',
-    block: 'main',
-    order: 9,
-    metric: 'carry',
-    tracked: true,
-    coreFunction: 'anti-lateral flexion',
-    cues: ['30 metres per side', 'anti-lateral flexion, pelvic stability, grip, trunk stiffness'],
-    progressionLadder: ['added load'],
-    stopRules: ['side-bent under the load', 'grip failed before the distance'],
-    prescriptions: [
-      { weeks: [1, 2, 3], sets: 2, distanceM: 30, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [4], sets: 1, distanceM: 30, rpeLow: 6, rpeHigh: 6, perSide: true },
-      { weeks: [5, 6, 7], sets: 2, distanceM: 30, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [8], sets: 1, distanceM: 30, rpeLow: 6, rpeHigh: 6, perSide: true },
-      { weeks: [9, 10], sets: 2, distanceM: 30, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [11], sets: 2, distanceM: 30, rpeLow: 7.5, rpeHigh: 7.5, perSide: true },
-      { weeks: [12], sets: 1, distanceM: 30, rpeLow: 6, rpeHigh: 6, perSide: true },
+      { weeks: [1], sets: 1, minutesEach: 20, rpeLow: 5.5, rpeHigh: 5.5 },
+      { weeks: [2], sets: 1, minutesEach: 22, rpeLow: 5.5, rpeHigh: 6 },
+      { weeks: [3], sets: 1, minutesEach: 24, rpeLow: 6, rpeHigh: 6 },
+      { weeks: [4], sets: 1, minutesEach: 26, rpeLow: 6, rpeHigh: 6 },
+      { weeks: [5], sets: 1, minutesEach: 28, rpeLow: 6, rpeHigh: 6.5 },
+      { weeks: [6], sets: 1, minutesEach: 18, rpeLow: 4, rpeHigh: 5, note: '15–18 min' },
+      { weeks: [7], sets: 1, minutesEach: 24, rpeLow: 6, rpeHigh: 6 },
+      { weeks: [8], sets: 1, minutesEach: 26, rpeLow: 6, rpeHigh: 6 },
+      { weeks: [9], sets: 1, minutesEach: 28, rpeLow: 6, rpeHigh: 6.5 },
+      { weeks: [10], sets: 1, minutesEach: 30, rpeLow: 6, rpeHigh: 6.5 },
+      { weeks: [11], sets: 1, minutesEach: 30, rpeLow: 6.5, rpeHigh: 6.5 },
+      { weeks: [12], sets: 1, minutesEach: 25, rpeLow: 5, rpeHigh: 6, note: '20–25 min' },
     ],
   },
 
   // ==========================================================================
-  // WEDNESDAY AM — FRONT LEVER GREASE THE GROOVE
-  // Everything @ RPE 4–5. Skill familiarity without touching the main workout.
+  // TUESDAY — PULL A: PRIMARY FRONT-LEVER SESSION
+  // ==========================================================================
+  {
+    id: 'fl-hold-primary',
+    name: 'Hard front-lever isometric',
+    day: 'tue',
+    block: 'main',
+    order: 1,
+    metric: 'hold',
+    ladderId: 'frontLever',
+    tracked: true,
+    restSeconds: 270,
+    cues: [
+      '5–8 s hold',
+      'rest 4–5 min',
+      'likely starting options: open advanced tuck, one-leg, or lightly band-assisted straddle/full',
+      'never count seconds after hip height or scapular position collapses',
+    ],
+    // "When you can hold the position for 8 sec with ~2 clean seconds still
+    // available", progress one step.
+    progressionLadder: ['open the tuck further', 'move to one-leg', 'reduce band assistance', 'progress toward straddle/full'],
+    stopRules: FL_STOP,
+    prescriptions: weekly(
+      [
+        [4, 8, 8],
+        [4, 8, 8],
+        [4, 8, 8],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [2, 6, 6],
+        [4, 8, 8],
+        [4, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [4, 8.5, 9],
+        [3, 7, 7, '2–3 sets, then optional benchmark'],
+      ],
+      { secLow: 5, secHigh: 8 },
+    ),
+  },
+  {
+    id: 'fl-raise',
+    name: 'Front-lever raise',
+    day: 'tue',
+    block: 'main',
+    order: 2,
+    metric: 'reps',
+    ladderId: 'frontLever',
+    tracked: true,
+    restSeconds: 270,
+    cues: ['4–6 reps', 'rest 4–5 min', 'elbows locked', 'use the hardest leverage that permits locked elbows and no hip pike'],
+    progressionLadder: ['advanced tuck', 'open advanced tuck', 'one-leg', 'straddle', 'assisted full'],
+    stopRules: ['elbows bent', 'hips piked', 'momentum from the swing'],
+    prescriptions: weekly(
+      [
+        [4, 8, 8],
+        [4, 8, 8],
+        [4, 8, 8],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [2, 6, 7],
+        [4, 8, 8],
+        [4, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [3, 7, 8, '2–3 sets'],
+      ],
+      { repsLow: 4, repsHigh: 6 },
+    ),
+  },
+  {
+    id: 'rear-delt-fly',
+    name: 'Reverse pec deck / cable rear-delt fly',
+    day: 'tue',
+    block: 'main',
+    order: 3,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 150,
+    cues: ['10–15 reps', 'rest 2–3 min', 'rear delts, not traps — do not turn it into a row'],
+    progressionLadder: ['15 clean reps', 'add load'],
+    stopRules: ['turned into a trap-dominant row'],
+    prescriptions: weekly(ACCESSORY, { repsLow: 10, repsHigh: 15 }),
+  },
+  {
+    id: 'wall-curl',
+    name: 'Strict back-to-wall curl',
+    day: 'tue',
+    block: 'main',
+    order: 4,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 150,
+    cues: ['8–12 reps', 'rest 2–3 min', 'back and glutes stay on the wall, upper arms nearly fixed, no hip drive or torso swing'],
+    progressionLadder: ['12 reps on all work sets at target RPE', 'increase load'],
+    stopRules: ['back left the wall', 'upper arms swung', 'hips drove'],
+    prescriptions: weekly(ACCESSORY, { repsLow: 8, repsHigh: 12 }),
+  },
+  {
+    id: 'standing-ab-wheel',
+    name: 'Standing ab wheel / standing ring rollout',
+    day: 'tue',
+    block: 'main',
+    order: 5,
+    metric: 'reps',
+    ladderId: 'abWheel',
+    tracked: true,
+    restSeconds: 210,
+    coreFunction: 'dynamic anti-extension',
+    cues: ['3–8 reps', 'rest 3–4 min', 'do not let lumbar extension substitute for abdominal control'],
+    progressionLadder: ['standing rollout to high target', 'lower target', 'longer extension', 'full standing rollout', 'paused full rollout'],
+    stopRules: ['lumbar extended', 'hips sagged'],
+    prescriptions: weekly(
+      [
+        [3, 8, 8],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [2, 6, 6],
+        [3, 8, 8],
+        [3, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [3, 8.5, 8.5],
+        [2, 7, 8],
+      ],
+      { repsLow: 3, repsHigh: 8 },
+    ),
+  },
+
+  // ==========================================================================
+  // WEDNESDAY AM — FRONT-LEVER GREASE THE GROOVE
+  //
+  // 6–10 min, RPE 4–5. Use more assistance than you think you need — the
+  // session should not create soreness.
   // ==========================================================================
   {
     id: 'wed-am-active-hang',
@@ -550,14 +696,14 @@ export const program: Exercise[] = [
     metric: 'reps',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['5 reps @ RPE 4–5'],
-    progressionLadder: [],
-    stopRules: [],
+    cues: ['5 reps', 'depress and retract the scapulae, elbows locked'],
+    progressionLadder: ['fuller scapular range'],
+    stopRules: ['elbows bent'],
     prescriptions: gtgPrescriptions({ repsLow: 5, repsHigh: 5, rpeLow: 4, rpeHigh: 5 }),
   },
   {
     id: 'wed-am-band-fl-hold',
-    name: 'Very light band-assisted full front lever',
+    name: 'Heavy-band full-shape front lever',
     day: 'wed',
     block: 'am',
     order: 2,
@@ -565,9 +711,9 @@ export const program: Exercise[] = [
     ladderId: 'frontLever',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['5 s @ RPE 4–5'],
-    progressionLadder: ['less assistance'],
-    stopRules: [],
+    cues: ['5 s', 'full shape with a heavy band — more assistance than you think you need'],
+    progressionLadder: ['cleaner horizontal line', 'lighter band'],
+    stopRules: ['hips sagged', 'session created soreness'],
     prescriptions: gtgPrescriptions({ secLow: 5, secHigh: 5, rpeLow: 4, rpeHigh: 5 }),
   },
   {
@@ -579,9 +725,9 @@ export const program: Exercise[] = [
     metric: 'reps',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['5 reps @ RPE 4–5', 'elbows stay locked'],
-    progressionLadder: [],
-    stopRules: [],
+    cues: ['5 reps', 'elbows locked throughout'],
+    progressionLadder: ['greater scapular range'],
+    stopRules: ['elbows bent'],
     prescriptions: gtgPrescriptions({ repsLow: 5, repsHigh: 5, rpeLow: 4, rpeHigh: 5 }),
   },
   {
@@ -594,745 +740,131 @@ export const program: Exercise[] = [
     ladderId: 'frontLever',
     tracked: true,
     setsLabel: 'rounds',
-    cues: ['2 reps @ RPE 4–5'],
-    progressionLadder: ['less assistance'],
-    stopRules: [],
+    cues: ['2 reps', 'easy — this is a groove, not a work set'],
+    progressionLadder: ['cleaner line', 'lighter band'],
+    stopRules: ['elbows bent', 'hips piked'],
     prescriptions: gtgPrescriptions({ repsLow: 2, repsHigh: 2, rpeLow: 4, rpeHigh: 5 }),
   },
 
   // ==========================================================================
-  // WEDNESDAY — FULL BODY B: front lever + heavy pull + main lower-body strength
-  //
-  // Lower-body volume decreases through the block on purpose, as marathon
-  // volume rises.
+  // WEDNESDAY — LEGS
+  // Three serious exercises + two low-cost lower-leg movements.
   // ==========================================================================
-  {
-    id: 'fl-row-banded',
-    name: 'Band-assisted full front lever row',
-    day: 'wed',
-    block: 'main',
-    order: 1,
-    metric: 'reps',
-    ladderId: 'frontLeverRow',
-    tracked: true,
-    cues: [
-      'always 5 reps',
-      'reduce band assistance only when all five reps are technically perfect below the target RPE',
-      'shape before band reduction',
-    ],
-    progressionLadder: ['cleaner shape', 'less assistance'],
-    stopRules: ['hips sagged', 'line changed substantially'],
-    prescriptions: [
-      { weeks: [1], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 5, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [12], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7.5, rpeHigh: 7.5 },
-    ],
-  },
-  {
-    // Carried over from the pre-v4 block with its id intact — the primary heavy
-    // pulling exposure then and now.
-    id: 'ring-pullup',
-    name: 'Weighted pull-up',
-    day: 'wed',
-    block: 'main',
-    order: 2,
-    metric: 'weightedReps',
-    tracked: true,
-    cues: ['always 4 reps', 'the primary heavy pulling exposure'],
-    progressionLadder: ['added load', 'greater ROM', 'more reps at the same RPE'],
-    stopRules: ['needed momentum', 'range reduced from the first rep'],
-    prescriptions: [
-      { weeks: [1], sets: 4, repsLow: 4, repsHigh: 4, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 4, repsLow: 4, repsHigh: 4, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 5, repsLow: 4, repsHigh: 4, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 3, repsLow: 4, repsHigh: 4, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 4, repsLow: 4, repsHigh: 4, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 5, repsLow: 4, repsHigh: 4, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 5, repsLow: 4, repsHigh: 4, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 3, repsLow: 4, repsHigh: 4, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 4, repsLow: 4, repsHigh: 4, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 4, repsLow: 4, repsHigh: 4, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 3, repsLow: 4, repsHigh: 4, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [12], sets: 2, repsLow: 4, repsHigh: 4, rpeLow: 7.5, rpeHigh: 7.5 },
-    ],
-  },
-  {
-    id: 'wall-hspu-negative',
-    name: 'Wall-facing HSPU negative',
-    day: 'wed',
-    block: 'main',
-    order: 3,
-    metric: 'reps',
-    ladderId: 'hspu',
-    tracked: true,
-    cues: ['always 3 reps per set', '6-second eccentric', 'if six seconds cannot be controlled, reduce range'],
-    progressionLadder: ['greater ROM', 'slower eccentric'],
-    stopRules: ['could not control the six seconds', 'range reduced from the first rep'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 3, repsHigh: 3, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 3, repsHigh: 3, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 3, repsHigh: 3, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 3, repsHigh: 3, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 3, repsHigh: 3, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 4, repsLow: 3, repsHigh: 3, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 4, repsLow: 3, repsHigh: 3, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 3, repsHigh: 3, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 3, repsHigh: 3, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 3, repsLow: 3, repsHigh: 3, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 3, repsHigh: 3, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 3, repsHigh: 3, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-    ],
-  },
   {
     id: 'hack-squat',
     name: 'Hack squat / pendulum squat',
     day: 'wed',
     block: 'main',
-    order: 4,
+    order: 1,
     metric: 'weightedReps',
     tracked: true,
-    cues: ['always 6 reps', 'lower-body volume falls as marathon volume rises'],
-    progressionLadder: ['added load', 'greater ROM'],
-    stopRules: ['range reduced from the first rep'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7 },
-    ],
+    restSeconds: 270,
+    cues: ['6–8 reps', 'rest 4–5 min', 'use the deepest ROM you can control consistently'],
+    // "Reach 8 reps across all work sets at target RPE, then add the smallest
+    // practical load and return toward 6 reps."
+    progressionLadder: ['8 reps on all work sets', 'add the smallest load, return toward 6 reps'],
+    stopRules: ['depth reduced', 'knees caved'],
+    prescriptions: weekly(
+      [
+        [4, 8, 8],
+        [4, 8, 8],
+        [4, 8, 8],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [2, 6, 7],
+        [4, 8, 8],
+        [4, 8, 8],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [3, 7, 8, '2–3 sets'],
+      ],
+      { repsLow: 6, repsHigh: 8 },
+    ),
+  },
+  {
+    id: 'bulgarian-split-squat',
+    name: 'Deep Bulgarian split squat',
+    day: 'wed',
+    block: 'main',
+    order: 2,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 240,
+    cues: ['6–8 reps per leg', 'rest 3–5 min', 'do not sacrifice depth to add weight'],
+    progressionLadder: ['greater controlled depth', 'better stability', 'reach 8 reps', 'add dumbbell load'],
+    stopRules: ['depth reduced', 'balance lost'],
+    prescriptions: weekly(LOWER, { repsLow: 6, repsHigh: 8, perSide: true }),
   },
   {
     id: 'nordic-curl',
     name: 'Nordic hamstring curl',
     day: 'wed',
     block: 'main',
-    order: 5,
+    order: 3,
     metric: 'reps',
     ladderId: 'nordic',
     tracked: true,
-    cues: ['always 5 reps', 'use band assistance if needed'],
-    progressionLadder: ['less assistance', 'slower eccentric', 'added load'],
-    stopRules: ['hips folded', 'dropped rather than lowered'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [11], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7.5, rpeHigh: 7.5 },
-      { weeks: [12], sets: 1, repsLow: 5, repsHigh: 5, rpeLow: 6, rpeHigh: 7 },
+    restSeconds: 270,
+    cues: ['4–6 reps', 'rest 4–5 min'],
+    progressionLadder: [
+      'assisted eccentric',
+      'assisted full rep',
+      'reduce assistance',
+      'full eccentric + partial concentric',
+      'full Nordic',
+      'slower full Nordic',
+      'light external load',
     ],
-  },
-  {
-    id: 'incline-db-press',
-    name: 'Incline dumbbell press',
-    day: 'wed',
-    block: 'main',
-    order: 6,
-    metric: 'weightedReps',
-    tracked: true,
-    cues: ['always 8 reps'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['range reduced from the first rep'],
-    prescriptions: [
-      { weeks: [1, 2], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 8, repsHigh: 8, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5, 6, 7], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9, 10], sets: 3, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [11], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 8, repsHigh: 8, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-    ],
-  },
-  {
-    id: 'standing-ab-wheel',
-    name: 'Standing ab wheel / standing ring rollout',
-    day: 'wed',
-    block: 'main',
-    order: 7,
-    metric: 'reps',
-    ladderId: 'abWheel',
-    tracked: true,
-    coreFunction: 'dynamic anti-extension',
-    cues: ['always 5 reps'],
-    progressionLadder: ['greater ROM', 'harder leverage', 'pause at end range'],
-    stopRules: ['hips sagged', 'lost the long body line'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-    ],
-  },
-  {
-    id: 'hanging-leg-raise',
-    name: 'Hanging leg raise with posterior pelvic curl',
-    day: 'wed',
-    block: 'main',
-    order: 8,
-    metric: 'reps',
-    tracked: true,
-    coreFunction: 'trunk flexion & compression',
-    cues: ['always 10 reps', 'do not just lift the knees — finish each rep with a pelvic curl'],
-    progressionLadder: ['greater ROM', 'more reps at the same RPE'],
-    stopRules: ['needed momentum', 'no pelvic curl at the top'],
-    prescriptions: [
-      { weeks: [1, 2], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 1, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5, 6, 7], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [9, 10], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [11], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7 },
-    ],
-  },
-  {
-    id: 'cable-triceps-ext',
-    name: 'Cable triceps extension',
-    day: 'wed',
-    block: 'main',
-    order: 9,
-    metric: 'weightedReps',
-    tracked: true,
-    cues: ['always 10 reps'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2, 3], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 9 },
-      { weeks: [4], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [5, 6, 7], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 9 },
-      { weeks: [8], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [9, 10], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7 },
-    ],
+    stopRules: ['hips piked to shorten the lever', 'dropped through the last third'],
+    prescriptions: weekly(LOWER, { repsLow: 4, repsHigh: 6 }),
   },
   {
     id: 'calf-raise-b',
-    name: 'Standing or seated calf raise',
+    name: 'Seated calf raise',
     day: 'wed',
-    block: 'main',
-    order: 10,
-    metric: 'weightedReps',
-    tracked: true,
-    cues: ['always 10 reps', 'full ROM', '2-second loaded stretch'],
-    progressionLadder: ['added load', 'greater ROM'],
-    stopRules: ['range reduced from the first rep'],
-    prescriptions: [
-      { weeks: NORMAL_WEEKS, sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: DELOAD_WEEKS, sets: 1, repsLow: 10, repsHigh: 10, rpeLow: 6, rpeHigh: 7 },
-    ],
-  },
-  {
-    id: 'post-workout-cossack',
-    name: 'Post-workout loaded Cossack',
-    day: 'wed',
-    block: 'main',
-    order: 11,
-    metric: 'weightedReps',
-    ladderId: 'middleSplit',
-    tracked: true,
-    rpeScale: 'stretch',
-    cues: ['6 reps per side'],
-    progressionLadder: ['greater ROM', 'more control', 'added load'],
-    stopRules: ['joint felt pinched', 'active control disappeared'],
-    prescriptions: [
-      { weeks: NORMAL_WEEKS, sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 6, rpeHigh: 7, perSide: true },
-      { weeks: DELOAD_WEEKS, sets: 1, repsLow: 6, repsHigh: 6, rpeLow: 5, rpeHigh: 6, perSide: true },
-    ],
-  },
-
-  // ==========================================================================
-  // FRIDAY AM — MIXED GREASE THE GROOVE
-  // Everything @ RPE 4–5.
-  // ==========================================================================
-  {
-    id: 'fri-am-chest-to-wall',
-    name: 'Chest-to-wall hold',
-    day: 'fri',
-    block: 'am',
-    order: 1,
-    metric: 'timeOnly',
-    ladderId: 'handstandBalance',
-    tracked: true,
-    setsLabel: 'rounds',
-    cues: ['15 s @ RPE 4–5'],
-    progressionLadder: ['improving line'],
-    stopRules: [],
-    prescriptions: gtgPrescriptions({ secLow: 15, secHigh: 15, rpeLow: 4, rpeHigh: 5 }),
-  },
-  {
-    id: 'fri-am-toe-pulls',
-    name: 'Toe pulls',
-    day: 'fri',
-    block: 'am',
-    order: 2,
-    metric: 'attempts',
-    ladderId: 'handstandBalance',
-    tracked: true,
-    setsLabel: 'rounds',
-    cues: ['2 attempts @ RPE 4–5'],
-    progressionLadder: ['losing assistance', 'improving line'],
-    stopRules: [],
-    prescriptions: gtgPrescriptions({ repsLow: 2, repsHigh: 2, rpeLow: 4, rpeHigh: 5 }),
-  },
-  {
-    id: 'fri-am-band-fl-hold',
-    name: 'Very light band-assisted full front lever',
-    day: 'fri',
-    block: 'am',
-    order: 3,
-    metric: 'timeOnly',
-    ladderId: 'frontLever',
-    tracked: true,
-    setsLabel: 'rounds',
-    cues: ['5 s @ RPE 4–5'],
-    progressionLadder: ['less assistance'],
-    stopRules: [],
-    prescriptions: gtgPrescriptions({ secLow: 5, secHigh: 5, rpeLow: 4, rpeHigh: 5 }),
-  },
-  {
-    id: 'fri-am-band-lever-raise',
-    name: 'Band-assisted straight-arm lever raise',
-    day: 'fri',
-    block: 'am',
-    order: 4,
-    metric: 'reps',
-    ladderId: 'frontLever',
-    tracked: true,
-    setsLabel: 'rounds',
-    cues: ['2 reps @ RPE 4–5', 'elbows stay locked'],
-    progressionLadder: ['less assistance'],
-    stopRules: [],
-    prescriptions: gtgPrescriptions({ repsLow: 2, repsHigh: 2, rpeLow: 4, rpeHigh: 5 }),
-  },
-
-  // ==========================================================================
-  // FRIDAY — FULL BODY C: mixed calisthenics + physique
-  // ==========================================================================
-  {
-    id: 'hspu-secondary',
-    name: 'Secondary HSPU progression',
-    day: 'fri',
-    block: 'main',
-    order: 1,
-    metric: 'reps',
-    ladderId: 'hspu',
-    tracked: true,
-    cues: ['always 5 reps', 'use a slightly easier progression than Monday'],
-    progressionLadder: ['better line', 'greater ROM', 'harder leverage'],
-    stopRules: ['depth reduced from the first rep', 'needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-    ],
-  },
-  {
-    id: 'fl-raise',
-    name: 'Front lever raise',
-    day: 'fri',
-    block: 'main',
-    order: 2,
-    metric: 'reps',
-    ladderId: 'frontLever',
-    tracked: true,
-    cues: ['always 5 reps', 'locked elbows'],
-    progressionLadder: ['harder leverage', 'less assistance', 'slower eccentric'],
-    stopRules: ['elbows unlocked', 'hips sagged', 'needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 4, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-    ],
-  },
-  {
-    id: 'bulgarian-split-squat',
-    name: 'Deep Bulgarian split squat',
-    day: 'fri',
-    block: 'main',
-    order: 3,
-    metric: 'weightedReps',
-    tracked: true,
-    cues: ['always 6 reps per leg', 'use maximum controlled depth'],
-    progressionLadder: ['greater ROM', 'added load'],
-    stopRules: ['range reduced from the first rep', 'lost balance'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [2], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [3], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5, perSide: true },
-      { weeks: [4], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7, perSide: true },
-      { weeks: [5], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [6], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5, perSide: true },
-      { weeks: [7], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5, perSide: true },
-      { weeks: [8], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7, perSide: true },
-      { weeks: [9], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [10], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [11], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7.5, rpeHigh: 7.5, perSide: true },
-      { weeks: [12], sets: 1, repsLow: 6, repsHigh: 6, rpeLow: 6, rpeHigh: 7, perSide: true },
-    ],
-  },
-  {
-    id: 'ring-dip-secondary',
-    name: 'Weighted ring dip (secondary)',
-    day: 'fri',
     block: 'main',
     order: 4,
     metric: 'weightedReps',
     tracked: true,
-    cues: ['always 6 reps', 'the secondary dip exposure'],
-    progressionLadder: ['added load', 'greater ROM', 'more reps at the same RPE'],
-    stopRules: ['depth reduced from the first rep', 'rings unstable'],
-    prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 1, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 1, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7 },
-    ],
-  },
-  {
-    id: 'pullup-secondary',
-    name: 'Weighted pull-up (secondary)',
-    day: 'fri',
-    block: 'main',
-    order: 5,
-    metric: 'weightedReps',
-    tracked: true,
-    cues: ['always 5 reps'],
-    progressionLadder: ['added load', 'greater ROM', 'more reps at the same RPE'],
-    stopRules: ['needed momentum', 'range reduced from the first rep'],
-    prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [3], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [4], sets: 1, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [6], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [7], sets: 3, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [8], sets: 1, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 2, repsLow: 5, repsHigh: 5, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 5, repsHigh: 5, rpeLow: 7, rpeHigh: 7 },
-    ],
-  },
-  // 6A / 6B / 6C share one sets-and-RPE table.
-  {
-    id: 'lateral-raise-c',
-    name: 'Dumbbell lateral raise (6A)',
-    day: 'fri',
-    block: 'main',
-    order: 6,
-    metric: 'weightedReps',
-    tracked: true,
-    supersetId: 'fri-6',
-    cues: ['12 reps', 'alternate with 6B and 6C'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [3], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [4], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [5], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [6], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [7], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [8], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [9], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [10], sets: 3, repsLow: 12, repsHigh: 12, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [11], sets: 2, repsLow: 12, repsHigh: 12, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 12, repsHigh: 12, rpeLow: 7, rpeHigh: 7 },
-    ],
-  },
-  {
-    id: 'cable-curl',
-    name: 'Cable or incline dumbbell curl (6B)',
-    day: 'fri',
-    block: 'main',
-    order: 7,
-    metric: 'weightedReps',
-    tracked: true,
-    supersetId: 'fri-6',
-    cues: ['10 reps', 'alternate with 6A and 6C'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [3], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [4], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [5], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [6], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [7], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [8], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [9], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [10], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [11], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7 },
-    ],
-  },
-  {
-    id: 'overhead-triceps-ext',
-    name: 'Overhead cable triceps extension (6C)',
-    day: 'fri',
-    block: 'main',
-    order: 8,
-    metric: 'weightedReps',
-    tracked: true,
-    supersetId: 'fri-6',
-    cues: ['10 reps', 'alternate with 6A and 6B'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: ['needed momentum'],
-    prescriptions: [
-      { weeks: [1], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [2], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [3], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [4], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [5], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [6], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [7], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [8], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7, note: '1–2 sets' },
-      { weeks: [9], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [10], sets: 3, repsLow: 10, repsHigh: 10, rpeLow: 9, rpeHigh: 9 },
-      { weeks: [11], sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 1, repsLow: 10, repsHigh: 10, rpeLow: 7, rpeHigh: 7 },
-    ],
-  },
-  {
-    id: 'windshield-wiper',
-    name: 'Windshield wiper',
-    day: 'fri',
-    block: 'main',
-    order: 9,
-    metric: 'reps',
-    ladderId: 'windshieldWiper',
-    tracked: true,
-    coreFunction: 'rotation & anti-rotation',
-    cues: ['always 6 reps each side', 'no momentum'],
-    progressionLadder: ['greater ROM', 'slower eccentric', 'pause at each side'],
-    stopRules: ['needed momentum', 'range reduced from the first rep'],
-    prescriptions: [
-      { weeks: [1], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [2], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [3], sets: 4, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5, perSide: true },
-      { weeks: [4], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7, perSide: true },
-      { weeks: [5], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [6], sets: 4, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5, perSide: true },
-      { weeks: [7], sets: 4, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5, perSide: true },
-      { weeks: [8], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7, perSide: true },
-      { weeks: [9], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [10], sets: 3, repsLow: 6, repsHigh: 6, rpeLow: 8.5, rpeHigh: 8.5, perSide: true },
-      { weeks: [11], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 8, rpeHigh: 8, perSide: true },
-      { weeks: [12], sets: 2, repsLow: 6, repsHigh: 6, rpeLow: 7, rpeHigh: 7, perSide: true, note: '1–2 sets' },
-    ],
-  },
-  {
-    id: 'calf-raise-c',
-    name: 'Calf raise (8A)',
-    day: 'fri',
-    block: 'main',
-    order: 10,
-    metric: 'weightedReps',
-    tracked: true,
-    supersetId: 'fri-8',
-    cues: ['10 reps'],
-    progressionLadder: ['added load', 'greater ROM'],
-    stopRules: ['range reduced from the first rep'],
-    prescriptions: [
-      { weeks: NORMAL_WEEKS, sets: 2, repsLow: 10, repsHigh: 10, rpeLow: 8, rpeHigh: 8 },
-      { weeks: DELOAD_WEEKS, sets: 1, repsLow: 10, repsHigh: 10, rpeLow: 6, rpeHigh: 7 },
-    ],
+    restSeconds: 150,
+    cues: ['10–15 reps', 'rest 2–3 min', '2 s pause at the bottom'],
+    progressionLadder: ['15 full-ROM reps with the loaded stretch', 'add load'],
+    stopRules: ['bottom pause skipped', 'ROM shortened'],
+    prescriptions: weekly(LOWER, { repsLow: 10, repsHigh: 15 }),
   },
   {
     id: 'tibialis-raise',
-    name: 'Tibialis raise (8B)',
-    day: 'fri',
+    name: 'Tibialis raise',
+    day: 'wed',
     block: 'main',
-    order: 11,
+    order: 5,
     metric: 'reps',
     tracked: true,
-    supersetId: 'fri-8',
-    cues: ['15 reps'],
-    progressionLadder: ['added load', 'more reps at the same RPE'],
-    stopRules: [],
-    prescriptions: [
-      { weeks: NORMAL_WEEKS, sets: 2, repsLow: 15, repsHigh: 15, rpeLow: 8, rpeHigh: 8 },
-      { weeks: DELOAD_WEEKS, sets: 1, repsLow: 15, repsHigh: 15, rpeLow: 6, rpeHigh: 7 },
-    ],
-  },
-  {
-    id: 'split-squat-hold',
-    name: 'Weighted deep split-squat hold',
-    day: 'fri',
-    block: 'main',
-    order: 12,
-    metric: 'hold',
-    ladderId: 'frontSplit',
-    tracked: true,
-    rpeScale: 'stretch',
-    cues: ['30 seconds per side'],
-    progressionLadder: ['greater ROM', 'more control', 'added load'],
-    stopRules: ['joint felt pinched', 'active control disappeared'],
-    prescriptions: [
-      { weeks: NORMAL_WEEKS, sets: 2, secLow: 30, secHigh: 30, rpeLow: 6, rpeHigh: 7, perSide: true },
-      { weeks: DELOAD_WEEKS, sets: 1, secLow: 30, secHigh: 30, rpeLow: 5, rpeHigh: 6, perSide: true },
-    ],
-  },
-
-  // ==========================================================================
-  // TUESDAY — QUALITY RUN
-  //
-  // Warm-up, threshold intervals, cooldown. The intervals should be difficult
-  // but repeatable — not race efforts.
-  // ==========================================================================
-  {
-    id: 'tue-run-warmup',
-    name: 'Warm-up — easy running',
-    day: 'tue',
-    block: 'main',
-    order: 1,
-    metric: 'runInterval',
-    tracked: true,
-    rpeScale: 'run',
-    cues: ['10 min easy @ RPE 2–3'],
-    progressionLadder: [],
-    stopRules: [],
-    prescriptions: [{ weeks: ALL_WEEKS, sets: 1, minutesEach: 10, rpeLow: 2, rpeHigh: 3 }],
-  },
-  {
-    id: 'tue-run-strides',
-    name: 'Warm-up strides',
-    day: 'tue',
-    block: 'main',
-    order: 2,
-    metric: 'hold',
-    tracked: true,
-    rpeScale: 'run',
-    restSeconds: 60,
-    cues: ['4 × 20 s relaxed strides @ RPE 7', '60 s walk/jog between strides'],
-    progressionLadder: [],
-    stopRules: [],
-    prescriptions: [{ weeks: ALL_WEEKS, sets: 4, secLow: 20, secHigh: 20, rpeLow: 7, rpeHigh: 7 }],
-  },
-  {
-    id: 'tue-threshold',
-    name: 'Threshold intervals',
-    day: 'tue',
-    block: 'main',
-    order: 3,
-    metric: 'runInterval',
-    tracked: true,
-    rpeScale: 'run',
-    // "Recovery: 2 minutes very easy jogging".
     restSeconds: 120,
-    cues: ['8 minutes per rep', '2 min very easy jogging between reps', 'difficult but repeatable, not a race effort'],
-    progressionLadder: ['more ground covered at the same RPE'],
-    stopRules: ['pace fell away inside the interval'],
-    prescriptions: [
-      { weeks: [1], sets: 3, minutesEach: 8, rpeLow: 7.5, rpeHigh: 7.5 },
-      { weeks: [2], sets: 3, minutesEach: 8, rpeLow: 7.5, rpeHigh: 7.5 },
-      { weeks: [3], sets: 4, minutesEach: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [4], sets: 2, minutesEach: 8, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [5], sets: 4, minutesEach: 8, rpeLow: 7.5, rpeHigh: 7.5 },
-      { weeks: [6], sets: 4, minutesEach: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [7], sets: 5, minutesEach: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [8], sets: 3, minutesEach: 8, rpeLow: 7, rpeHigh: 7 },
-      { weeks: [9], sets: 5, minutesEach: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [10], sets: 5, minutesEach: 8, rpeLow: 8.5, rpeHigh: 8.5 },
-      { weeks: [11], sets: 4, minutesEach: 8, rpeLow: 8, rpeHigh: 8 },
-      { weeks: [12], sets: 3, minutesEach: 8, rpeLow: 7.5, rpeHigh: 7.5 },
-    ],
-  },
-  {
-    id: 'tue-run-cooldown',
-    name: 'Cooldown',
-    day: 'tue',
-    block: 'main',
-    order: 4,
-    metric: 'runInterval',
-    tracked: true,
-    rpeScale: 'run',
-    cues: ['10 min easy @ RPE 2'],
-    progressionLadder: [],
-    stopRules: [],
-    prescriptions: [{ weeks: ALL_WEEKS, sets: 1, minutesEach: 10, rpeLow: 2, rpeHigh: 2 }],
+    cues: ['15–20 reps', 'rest 1.5–2.5 min'],
+    progressionLadder: ['20 full-ROM reps', 'increase resistance'],
+    stopRules: ['ROM shortened'],
+    prescriptions: weekly(LOWER, { repsLow: 15, repsHigh: 20 }),
   },
 
   // ==========================================================================
-  // TUESDAY LATER — FLEXIBILITY A: pancake + middle split + handstand shoulders
+  // THURSDAY LATER — FLEXIBILITY A: PANCAKE + MIDDLE SPLIT + HANDSTAND SHOULDER
   //
-  // Ideally separated from the quality run by several hours. Progress loaded
-  // mobility ROM -> control -> load, not pain tolerance. Every item shares one
-  // sets-and-RPE table, so the whole session moves together.
+  // Thursday is a rest day; this is its only session. Start with 3–5 min of
+  // easy movement if cold. Loaded movements and static holds run on separate
+  // set tables (see FLEX_A_LOADED / FLEX_A_STATIC).
   // ==========================================================================
-  ...([
+  ...[
     {
       id: 'flexa-cossack',
       name: 'Loaded Cossack squat',
       order: 1,
       metric: 'weightedReps' as const,
       ladderId: 'middleSplit',
-      reps: 5,
+      repsLow: 5,
       perSide: true,
+      overload: 'deeper ROM, then more load',
     },
     {
       id: 'flexa-pancake-good-morning',
@@ -1340,15 +872,32 @@ export const program: Exercise[] = [
       order: 2,
       metric: 'weightedReps' as const,
       ladderId: 'pancake',
-      reps: 8,
+      repsLow: 8,
+      cues: ['3–4 s eccentric', '1–2 s bottom control', 'hinge from the hips'],
+      overload: 'chest closer to the floor, then modest load',
     },
+    {
+      id: 'flexa-wall-liftoff',
+      name: 'Active shoulder lift-off',
+      order: 6,
+      metric: 'reps' as const,
+      ladderId: 'handstandShoulder',
+      repsLow: 6,
+      repsHigh: 8,
+      cues: ['2 s top hold'],
+      overload: 'greater active range; eventually very light external load',
+    },
+  ].map(flexibilityExercise('thu', FLEX_A_LOADED)),
+  ...[
     {
       id: 'flexa-pancake-contract-relax',
       name: 'Pancake contract-relax',
       order: 3,
       metric: 'hold' as const,
       ladderId: 'pancake',
-      seconds: 45,
+      secLow: 45,
+      secHigh: 60,
+      overload: 'reduce torso-to-floor distance, not endless duration',
     },
     {
       id: 'flexa-middle-split',
@@ -1356,7 +905,9 @@ export const program: Exercise[] = [
       order: 4,
       metric: 'hold' as const,
       ladderId: 'middleSplit',
-      seconds: 45,
+      secLow: 45,
+      secHigh: 60,
+      overload: 'lower support, pelvis closer to the floor',
     },
     {
       id: 'flexa-bench-shoulder',
@@ -1364,153 +915,439 @@ export const program: Exercise[] = [
       order: 5,
       metric: 'hold' as const,
       ladderId: 'handstandShoulder',
-      seconds: 45,
+      secLow: 45,
+      cues: ['ribs controlled', 'avoid lumbar compensation'],
+      overload: 'more genuine shoulder flexion without rib flare',
     },
-    {
-      id: 'flexa-wall-liftoff',
-      name: 'Wall shoulder-flexion lift-off',
-      order: 6,
-      metric: 'reps' as const,
-      ladderId: 'handstandShoulder',
-      reps: 8,
-      note: '2-second hold at the top',
-    },
-  ].map(flexibilityExercise('tue', FLEX_A_WEEKS))),
+  ].map(flexibilityExercise('thu', FLEX_A_STATIC)),
 
   // ==========================================================================
-  // WEDNESDAY LATER — RECOVERY RUN
-  //
-  // At least 6 hours after the gym if possible. Weeks 1, 2 and 4 prescribe
-  // nothing: authored as `sets: 0` so the nearest-earlier fallback cannot fill
-  // them in from a neighbouring week.
+  // FRIDAY AM — HANDSTAND GREASE THE GROOVE
+  // RPE 4–5. Do not let the morning work reduce afternoon HSPU performance.
   // ==========================================================================
   {
-    id: 'wed-recovery-run',
-    name: 'Recovery run',
-    day: 'wed',
+    id: 'fri-am-wrist-lean',
+    name: 'Wrist lean',
+    day: 'fri',
+    block: 'am',
+    order: 1,
+    metric: 'timeOnly',
+    tracked: true,
+    setsLabel: 'rounds',
+    cues: ['20 s', 'gentle load into the wrists before any handstand work'],
+    progressionLadder: ['greater wrist extension', 'more load through the palm'],
+    stopRules: ['wrist pain rather than stretch'],
+    prescriptions: gtgPrescriptions({ secLow: 20, secHigh: 20, rpeLow: 4, rpeHigh: 5 }),
+  },
+  {
+    id: 'fri-am-chest-to-wall',
+    name: 'Chest-to-wall line',
+    day: 'fri',
+    block: 'am',
+    order: 2,
+    metric: 'timeOnly',
+    ladderId: 'handstandBalance',
+    tracked: true,
+    setsLabel: 'rounds',
+    cues: ['20 s', 'ribs in, glutes on, push tall through the shoulders'],
+    progressionLadder: ['better wall line', 'smaller toe contact'],
+    stopRules: ['line collapsed', 'shoulders sagged'],
+    prescriptions: gtgPrescriptions({ secLow: 20, secHigh: 20, rpeLow: 4, rpeHigh: 5 }),
+  },
+  {
+    id: 'fri-am-toe-pulls',
+    name: 'Toe pulls',
+    day: 'fri',
+    block: 'am',
+    order: 3,
+    metric: 'attempts',
+    ladderId: 'handstandBalance',
+    tracked: true,
+    setsLabel: 'rounds',
+    cues: ['2 attempts'],
+    progressionLadder: ['cleaner 1–3 s catches', 'repeated 3–5 s catches'],
+    stopRules: ['attempts stopped feeling crisp'],
+    prescriptions: gtgPrescriptions({ repsLow: 2, repsHigh: 2, rpeLow: 4, rpeHigh: 5 }),
+  },
+  {
+    id: 'fri-am-fingertip-shifts',
+    name: 'Fingertip pressure shifts',
+    day: 'fri',
+    block: 'am',
+    order: 4,
+    metric: 'reps',
+    tracked: true,
+    setsLabel: 'rounds',
+    cues: ['6 reps'],
+    progressionLadder: ['better fingertip correction'],
+    stopRules: ['line moved with the shift'],
+    prescriptions: gtgPrescriptions({ repsLow: 6, repsHigh: 6, rpeLow: 4, rpeHigh: 5 }),
+  },
+  {
+    id: 'fri-am-wall-release-catch',
+    name: 'Controlled wall-release catch',
+    day: 'fri',
+    block: 'am',
+    order: 5,
+    metric: 'attempts',
+    ladderId: 'handstandBalance',
+    tracked: true,
+    setsLabel: 'rounds',
+    cues: ['1–2 attempts', 'release the wall and catch the balance under control'],
+    progressionLadder: ['repeated 1–3 s catches', 'repeated 3–5 s catches', 'longer wall releases'],
+    stopRules: ['attempts stopped feeling crisp'],
+    prescriptions: gtgPrescriptions({ repsLow: 1, repsHigh: 2, rpeLow: 4, rpeHigh: 5 }),
+  },
+
+  // ==========================================================================
+  // FRIDAY — PUSH B: WEIGHTED DIP PRIORITY
+  // ==========================================================================
+  {
+    id: 'ring-dip-secondary',
+    name: 'Weighted ring dip',
+    day: 'fri',
+    block: 'main',
+    order: 1,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 270,
+    cues: ['4–6 reps', 'rest 4–5 min', 'progress exactly as Monday'],
+    progressionLadder: ['6 clean reps on every set', 'add 1.25–2.5 kg'],
+    stopRules: DIP_STOP,
+    prescriptions: weekly(RING_DIP, { repsLow: 4, repsHigh: 6 }),
+  },
+  {
+    id: 'hspu-secondary',
+    name: 'Wall-assisted HSPU',
+    day: 'fri',
+    block: 'main',
+    order: 2,
+    metric: 'weightedReps',
+    ladderId: 'hspu',
+    tracked: true,
+    restSeconds: 270,
+    cues: ['3–6 reps', 'rest 4–5 min', 'increase ROM before adding load'],
+    progressionLadder: ['partial ROM', 'increase depth', 'full current setup', 'parallette deficit', 'reduce wall assistance over time'],
+    stopRules: HSPU_STOP,
+    prescriptions: weekly(
+      [
+        [3, 7.5, 8],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8, 8],
+        [4, 8.5, 8.5],
+        [2, 6, 6],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [3, 8.5, 8.5],
+        [2, 7, 8],
+      ],
+      { repsLow: 3, repsHigh: 6 },
+    ),
+  },
+  {
+    id: 'lateral-raise-c',
+    name: 'Strict dumbbell lateral raise',
+    day: 'fri',
+    block: 'main',
+    order: 3,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 150,
+    cues: ['10–15 reps', 'same strict rules as Monday'],
+    progressionLadder: ['15 clean reps', 'increase weight, reps return to 10–12'],
+    stopRules: ['leg drive appeared', 'shrugged', 'torso swung'],
+    prescriptions: weekly(ACCESSORY, { repsLow: 10, repsHigh: 15 }),
+  },
+  {
+    id: 'cable-triceps-ext',
+    name: 'Cable triceps pressdown',
+    day: 'fri',
+    block: 'main',
+    order: 4,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 150,
+    cues: ['10–15 reps', 'rest 2–3 min'],
+    progressionLadder: ['15 strict reps', 'add load'],
+    stopRules: ['elbows drifted forward', 'shoulders took over'],
+    prescriptions: weekly(ACCESSORY, { repsLow: 10, repsHigh: 15 }),
+  },
+  {
+    id: 'cable-crunch',
+    name: 'Cable crunch (5A)',
+    day: 'fri',
+    block: 'main',
+    order: 5,
+    metric: 'weightedReps',
+    tracked: true,
+    supersetId: 'fri-5',
+    coreFunction: 'loaded spinal flexion',
+    cues: ['8–15 reps', 'progress load while maintaining actual spinal flexion'],
+    progressionLadder: ['15 reps with true spinal flexion', 'add load'],
+    stopRules: ['hips flexed instead of the spine'],
+    prescriptions: weekly(
+      [
+        [3, 8, 8],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8.5, 8.5],
+        [4, 8.5, 9],
+        [2, 6, 6],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8.5, 8.5],
+        [4, 8.5, 9],
+        [3, 8.5, 8.5],
+        [2, 7, 7],
+      ],
+      { repsLow: 8, repsHigh: 15 },
+    ),
+  },
+  {
+    id: 'weighted-side-plank',
+    name: 'Weighted side plank (5B)',
+    day: 'fri',
+    block: 'main',
+    order: 6,
+    metric: 'hold',
+    tracked: true,
+    supersetId: 'fri-5',
+    coreFunction: 'anti-lateral flexion',
+    cues: ['20–30 s per side', 'once 30 s is clearly below target RPE, add a small plate or lengthen the lever'],
+    progressionLadder: ['30 s clean per side', 'small plate', 'harder lever'],
+    stopRules: ['hips dropped', 'torso rotated'],
+    prescriptions: weekly(
+      [
+        [2, 8, 8],
+        [2, 8, 8],
+        [2, 8, 8],
+        [3, 8.5, 8.5],
+        [3, 8.5, 8.5],
+        [1, 6, 6],
+        [2, 8, 8],
+        [2, 8, 8],
+        [3, 8.5, 8.5],
+        [3, 8.5, 8.5],
+        [2, 8.5, 8.5],
+        [2, 7, 7, '1–2 sets'],
+      ],
+      { secLow: 20, secHigh: 30, perSide: true },
+    ),
+  },
+
+  // ==========================================================================
+  // FRIDAY LATER — HIIT
+  //
+  // 30 s hard / 90 s very easy. Hard is RPE 9–9.5, not sloppy failure. Air
+  // bike, stationary bike, rower or ski erg to limit eccentric damage. After
+  // Push B or several hours later, never before weighted dips/HSPU. Progress
+  // the number of QUALITY intervals first; once eight are established, improve
+  // average output slightly while retaining all eight. If output crashes after
+  // the first few intervals, the opening effort was too hard.
+  // ==========================================================================
+  {
+    id: 'fri-hiit-warmup',
+    name: 'Warm-up — easy + accelerations',
+    day: 'fri',
     block: 'later',
     order: 1,
     metric: 'runInterval',
     tracked: true,
     rpeScale: 'run',
-    cues: ['10 minutes per block @ RPE 2', 'if this feels remotely like a workout, slow down'],
+    cues: ['6–8 min easy', 'then 3 × 10 s progressive accelerations with 50–60 s easy between'],
     progressionLadder: [],
     stopRules: [],
-    prescriptions: [
-      { weeks: [1, 2], sets: 0 },
-      { weeks: [3], sets: 2, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [4], sets: 0 },
-      { weeks: [5], sets: 2, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [6], sets: 3, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [7], sets: 3, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [8], sets: 2, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [9], sets: 3, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [10], sets: 3, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [11], sets: 3, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-      { weeks: [12], sets: 2, minutesEach: 10, rpeLow: 2, rpeHigh: 2 },
-    ],
-  },
-
-  // ==========================================================================
-  // THURSDAY — EASY RUN. No pace chasing.
-  // ==========================================================================
-  {
-    id: 'thu-easy-run',
-    name: 'Easy run',
-    day: 'thu',
-    block: 'main',
-    order: 1,
-    metric: 'runInterval',
-    tracked: true,
-    rpeScale: 'run',
-    cues: ['10 minutes per block @ RPE 2.5–3', 'no pace chasing'],
-    progressionLadder: ['more ground covered at the same RPE'],
-    stopRules: [],
-    prescriptions: [
-      { weeks: [1], sets: 4, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [2], sets: 4, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [3], sets: 5, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [4], sets: 4, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [5], sets: 5, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [6], sets: 5, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [7], sets: 6, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [8], sets: 4, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [9], sets: 6, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [10], sets: 6, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [11], sets: 6, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [12], sets: 4, minutesEach: 10, rpeLow: 2.5, rpeHigh: 3 },
-    ],
-  },
-
-  // ==========================================================================
-  // SATURDAY — EASY RUN + STRIDES
-  // ==========================================================================
-  {
-    id: 'sat-easy-run',
-    name: 'Easy run',
-    day: 'sat',
-    block: 'main',
-    order: 1,
-    metric: 'runInterval',
-    tracked: true,
-    rpeScale: 'run',
-    cues: ['10 minutes per block @ RPE 3'],
-    progressionLadder: ['more ground covered at the same RPE'],
-    stopRules: [],
-    prescriptions: [
-      { weeks: [1], sets: 4, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [2], sets: 4, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [3], sets: 4, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [4], sets: 3, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [5], sets: 4, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [6], sets: 4, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [7], sets: 5, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [8], sets: 4, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [9], sets: 5, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [10], sets: 5, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [11], sets: 4, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [12], sets: 3, minutesEach: 10, rpeLow: 3, rpeHigh: 3 },
-    ],
+    prescriptions: [{ weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 1, minutesEach: 8, rpeLow: 2, rpeHigh: 3, note: '6–8 min' }],
   },
   {
-    id: 'sat-strides',
-    name: 'Strides',
-    day: 'sat',
-    block: 'main',
+    id: 'fri-hiit-intervals',
+    name: 'HIIT intervals — 30 s hard',
+    day: 'fri',
+    block: 'later',
     order: 2,
     metric: 'hold',
     tracked: true,
     rpeScale: 'run',
-    restSeconds: 75,
-    cues: ['20 s @ RPE 7.5–8', '60–90 s walk/jog between', 'fast, relaxed, technically clean'],
+    restSeconds: 90,
+    cues: ['30 s hard', '90 s very easy between', 'hard is RPE 9–9.5, not sloppy absolute failure'],
+    progressionLadder: ['more quality intervals, up to eight', 'slightly more output while keeping all eight'],
+    stopRules: ['output crashed after the first few — the opener was too hard'],
+    prescriptions: weekly(
+      [
+        [5, 9, 9],
+        [6, 9, 9],
+        [6, 9, 9.5],
+        [7, 9, 9],
+        [8, 9, 9.5],
+        [4, 8, 8],
+        [6, 9, 9],
+        [7, 9, 9],
+        [8, 9, 9.5],
+        [8, 9.5, 9.5],
+        [8, 9.5, 9.5],
+        [5, 8.5, 9],
+      ],
+      { secLow: 30, secHigh: 30 },
+    ),
+  },
+  {
+    id: 'fri-hiit-cooldown',
+    name: 'Cooldown',
+    day: 'fri',
+    block: 'later',
+    order: 3,
+    metric: 'runInterval',
+    tracked: true,
+    rpeScale: 'run',
+    cues: ['5 min very easy'],
     progressionLadder: [],
-    stopRules: ['form fell apart inside the stride'],
-    prescriptions: [
-      { weeks: [1], sets: 4, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [2], sets: 4, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [3], sets: 6, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [4], sets: 4, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [5], sets: 6, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [6], sets: 6, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [7], sets: 6, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [8], sets: 4, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [9], sets: 6, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [10], sets: 6, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [11], sets: 4, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-      { weeks: [12], sets: 4, secLow: 20, secHigh: 20, rpeLow: 7.5, rpeHigh: 8 },
-    ],
+    stopRules: [],
+    prescriptions: [{ weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], sets: 1, minutesEach: 5, rpeLow: 2, rpeHigh: 2 }],
   },
 
   // ==========================================================================
-  // SUNDAY — LONG RUN
-  //
-  // Split into two exercises so the marathon-specific finishes in weeks 9–11
-  // are data rather than a note: the base blocks stay at RPE 3, and the closing
-  // blocks that run faster are their own logged sets.
+  // SATURDAY — PULL B: HEAVY PULL + SECONDARY FRONT-LEVER WORK
   // ==========================================================================
   {
-    id: 'sun-long-run',
-    name: 'Long run',
+    id: 'fl-hold-banded',
+    name: 'Band-assisted full-shape front-lever hold',
+    day: 'sat',
+    block: 'main',
+    order: 1,
+    metric: 'hold',
+    ladderId: 'frontLever',
+    tracked: true,
+    restSeconds: 210,
+    cues: ['8–10 s hold', 'rest 3–4 min', 'intentionally easier than Tuesday\'s hard lever work'],
+    // "Reduce band assistance only when: body stays horizontal; elbows stay
+    // locked; hips do not sag."
+    progressionLadder: ['body horizontal, elbows locked, hips up', 'then reduce band assistance'],
+    stopRules: FL_STOP,
+    prescriptions: weekly(
+      [
+        [3, 6, 7],
+        [3, 6, 7],
+        [3, 7, 7],
+        [4, 7, 7],
+        [4, 7, 7],
+        [2, 5, 6],
+        [3, 6, 7],
+        [3, 7, 7],
+        [4, 7, 7],
+        [4, 7, 7],
+        [3, 7, 7],
+        [2, 6, 6],
+      ],
+      { secLow: 8, secHigh: 10 },
+    ),
+  },
+  {
+    id: 'ring-pullup',
+    name: 'Weighted pull-up',
+    day: 'sat',
+    block: 'main',
+    order: 2,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 270,
+    cues: ['3–5 reps', 'rest 4–5 min', 'controlled dead hang, no kick, consistent top standard'],
+    // "When all sets reach 5 clean reps at or below target RPE, add ~1.25–2.5 kg."
+    progressionLadder: ['5 clean reps on every set', 'add 1.25–2.5 kg'],
+    stopRules: ['kicked', 'top standard dropped', 'dead hang skipped'],
+    prescriptions: weekly(
+      [
+        [4, 8, 8],
+        [4, 8, 8],
+        [4, 8, 8],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [2, 6, 7],
+        [4, 8, 8],
+        [4, 8, 8],
+        [5, 8.5, 8.5],
+        [5, 8.5, 8.5],
+        [4, 8.5, 9],
+        [3, 7, 8, '2–3 sets'],
+      ],
+      { repsLow: 3, repsHigh: 5 },
+    ),
+  },
+  {
+    id: 'fl-row-banded',
+    name: 'Front-lever pull / row',
+    day: 'sat',
+    block: 'main',
+    order: 3,
+    metric: 'reps',
+    ladderId: 'frontLeverRow',
+    tracked: true,
+    restSeconds: 270,
+    cues: ['4–6 reps', 'rest 4–5 min', 'band-assisted full-shape version if required', 'body shape comes before band reduction'],
+    progressionLadder: ['improve body line and hip height', 'reach 6 reps', 'reduce assistance', 'progress leverage'],
+    stopRules: ['hips dropped', 'line broke to finish the rep'],
+    prescriptions: weekly(
+      [
+        [3, 7.5, 8],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [2, 6, 6],
+        [3, 8, 8],
+        [3, 8, 8],
+        [4, 8.5, 8.5],
+        [4, 8.5, 8.5],
+        [3, 8.5, 8.5],
+        [2, 7, 7],
+      ],
+      { repsLow: 4, repsHigh: 6 },
+    ),
+  },
+  {
+    id: 'hammer-curl',
+    name: 'Hammer curl',
+    day: 'sat',
+    block: 'main',
+    order: 4,
+    metric: 'weightedReps',
+    tracked: true,
+    restSeconds: 150,
+    cues: ['8–12 reps', 'rest 2–3 min'],
+    progressionLadder: ['12 strict reps', 'increase load'],
+    stopRules: ['torso swung', 'elbows drifted'],
+    prescriptions: weekly(ACCESSORY, { repsLow: 8, repsHigh: 12 }),
+  },
+  {
+    id: 'windshield-wiper',
+    name: 'Hanging windshield wiper',
+    day: 'sat',
+    block: 'main',
+    order: 5,
+    metric: 'reps',
+    ladderId: 'windshieldWiper',
+    tracked: true,
+    restSeconds: 210,
+    coreFunction: 'rotation / anti-rotation',
+    cues: ['6–10 reps per side', 'rest 3–4 min', 'no swinging'],
+    progressionLadder: ['bent knees', 'partially extended legs', 'straight legs / smaller ROM', 'straight legs / full ROM', 'slower eccentric', 'paused reps'],
+    stopRules: ['swung', 'ROM shortened'],
+    prescriptions: weekly(LOWER, { repsLow: 6, repsHigh: 10, perSide: true }),
+  },
+
+  // ==========================================================================
+  // SUNDAY — LONG LOW-INTENSITY CARDIO
+  //
+  // RPE 2–3: full sentences, controlled breathing, finish feeling you could
+  // continue. Incline walk, easy run, bike, hike, elliptical or walk/jog.
+  // Progress DURATION, not intensity. If impact fatigue develops when running,
+  // switch to bike, incline walking, hiking or elliptical.
+  // ==========================================================================
+  {
+    id: 'sun-long-cardio',
+    name: 'Long low-intensity cardio',
     day: 'sun',
     block: 'main',
     order: 1,
@@ -1518,66 +1355,45 @@ export const program: Exercise[] = [
     tracked: true,
     rpeScale: 'run',
     cues: [
-      '15 minutes per block',
-      'cap the longest run around 30–32 km even if the time prescription would take you farther',
+      'you should be able to speak in full sentences throughout',
+      'brisk incline walk, easy run, bike, hike, elliptical or mixed walk/jog',
+      'if impact fatigue develops, switch to bike, incline walking, hiking or elliptical',
     ],
-    progressionLadder: ['more ground covered at the same RPE'],
-    stopRules: [],
+    progressionLadder: ['longer duration at the same conversational effort'],
+    stopRules: ['effort drifted above RPE 3 — this is not a race'],
     prescriptions: [
-      { weeks: [1], sets: 5, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [2], sets: 6, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [3], sets: 7, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [4], sets: 5, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [5], sets: 7, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [6], sets: 8, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [7], sets: 9, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      { weeks: [8], sets: 6, minutesEach: 15, rpeLow: 2.5, rpeHigh: 3 },
-      // Weeks 9–11 hand their final blocks to `sun-long-run-finish`, so the
-      // counts here are the total minus that finish.
-      { weeks: [9], sets: 7, minutesEach: 15, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [10], sets: 8, minutesEach: 15, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [11], sets: 8, minutesEach: 15, rpeLow: 3, rpeHigh: 3 },
-      { weeks: [12], sets: 8, minutesEach: 15, rpeLow: 3, rpeHigh: 3 },
-    ],
-  },
-  {
-    id: 'sun-long-run-finish',
-    name: 'Long run — marathon-specific finish',
-    day: 'sun',
-    block: 'main',
-    order: 2,
-    metric: 'runInterval',
-    tracked: true,
-    rpeScale: 'run',
-    cues: ['the closing blocks of the long run, run faster on tired legs'],
-    progressionLadder: ['more ground covered at the same RPE'],
-    stopRules: ['could not hold the effort to the end of the block'],
-    prescriptions: [
-      // No finish before week 9 and none in week 12 — both authored explicitly,
-      // since the fallback would otherwise reach forwards and backwards.
-      { weeks: [1, 2, 3, 4, 5, 6, 7, 8], sets: 0 },
-      { weeks: [9], sets: 2, minutesEach: 15, rpeLow: 5, rpeHigh: 5 },
-      { weeks: [10], sets: 2, minutesEach: 15, rpeLow: 5, rpeHigh: 5.5 },
-      { weeks: [11], sets: 3, minutesEach: 15, rpeLow: 5, rpeHigh: 5.5 },
-      { weeks: [12], sets: 0 },
+      { weeks: [1], sets: 1, minutesEach: 45, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [2], sets: 1, minutesEach: 50, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [3], sets: 1, minutesEach: 55, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [4], sets: 1, minutesEach: 60, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [5], sets: 1, minutesEach: 65, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [6], sets: 1, minutesEach: 45, rpeLow: 2, rpeHigh: 2, note: '40–45 min' },
+      { weeks: [7], sets: 1, minutesEach: 60, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [8], sets: 1, minutesEach: 65, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [9], sets: 1, minutesEach: 70, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [10], sets: 1, minutesEach: 75, rpeLow: 2, rpeHigh: 3 },
+      { weeks: [11], sets: 1, minutesEach: 90, rpeLow: 2, rpeHigh: 3, note: '80–90 min' },
+      { weeks: [12], sets: 1, minutesEach: 60, rpeLow: 2, rpeHigh: 2 },
     ],
   },
 
   // ==========================================================================
-  // SUNDAY LATER — FLEXIBILITY B: front split + pike + bridge
+  // SUNDAY LATER — FLEXIBILITY B: FRONT SPLIT + PIKE + BRIDGE + ANKLE
   //
-  // Ideally several hours after the long run, after eating and rehydrating.
-  // This should never become a second hard lower-body workout.
+  // Ideally eat, hydrate, and separate deeper flexibility work from the cardio
+  // by a few hours.
   // ==========================================================================
-  ...([
+  ...[
     {
       id: 'flexb-hip-flexor-split',
       name: 'Hip-flexor split position',
       order: 1,
       metric: 'hold' as const,
       ladderId: 'frontSplit',
-      seconds: 45,
+      secLow: 45,
       perSide: true,
+      cues: ['squeeze the rear glute', 'posterior pelvic tilt', 'avoid lumbar compensation'],
+      overload: 'longer split stance while the pelvis stays controlled',
     },
     {
       id: 'flexb-half-split',
@@ -1585,8 +1401,11 @@ export const program: Exercise[] = [
       order: 2,
       metric: 'hold' as const,
       ladderId: 'frontSplit',
-      seconds: 45,
+      secLow: 45,
+      secHigh: 60,
       perSide: true,
+      cues: ['straight front knee', 'square hips'],
+      overload: 'more hip flexion without bending the knee',
     },
     {
       id: 'flexb-front-split',
@@ -1594,32 +1413,44 @@ export const program: Exercise[] = [
       order: 3,
       metric: 'hold' as const,
       ladderId: 'frontSplit',
-      seconds: 30,
+      secLow: 30,
+      secHigh: 45,
       perSide: true,
+      cues: ['use blocks or parallettes'],
+      overload: 'lower support, reduce the pelvis-to-floor gap',
     },
     {
       id: 'flexb-pike',
-      name: 'Pike',
+      name: 'Pike stretch',
       order: 4,
       metric: 'hold' as const,
       ladderId: 'pike',
-      seconds: 45,
-    },
-    {
-      id: 'flexb-ankle-dorsiflexion',
-      name: 'Ankle dorsiflexion stretch',
-      order: 5,
-      metric: 'hold' as const,
-      seconds: 30,
-      perSide: true,
+      secLow: 45,
+      secHigh: 60,
+      cues: ['straight knees', 'fold from the hips', 'chest and abdomen toward the thighs'],
+      overload: 'hands farther beyond the feet while the knees stay straight',
     },
     {
       id: 'flexb-bridge',
       name: 'Bridge progression',
-      order: 6,
+      order: 5,
       metric: 'hold' as const,
       ladderId: 'bridge',
-      seconds: 20,
+      secLow: 20,
+      secHigh: 30,
+      cues: ['straighter elbows', 'more shoulder opening', 'do not rely only on lumbar extension'],
+      overload: 'straighter elbows and greater shoulder opening before narrowing the stance',
     },
-  ].map(flexibilityExercise('sun', FLEX_B_WEEKS))),
+    {
+      id: 'flexb-ankle-dorsiflexion',
+      name: 'Ankle dorsiflexion stretch',
+      order: 6,
+      metric: 'hold' as const,
+      secLow: 30,
+      secHigh: 45,
+      perSide: true,
+      cues: ['heel stays fully planted'],
+      overload: 'increase knee-over-toe distance while the heel stays down',
+    },
+  ].map(flexibilityExercise('sun', FLEX_B_WEEKS)),
 ];

@@ -24,8 +24,7 @@ import type { Block, DayId } from '../../domain/types';
 
 // Today renders the real calendar weekday, so the fixture is anchored to the
 // real clock rather than a frozen date: start the block two weeks before this
-// week's Monday, which puts "now" in week 3 — the first week that prescribes
-// all three of Wednesday's sessions.
+// week's Monday, which puts "now" in week 3.
 const TODAY = startOfToday();
 const BLOCK_START = format(subWeeks(startOfWeek(TODAY, { weekStartsOn: 1 }), 2), 'yyyy-MM-dd');
 const TODAY_DAY = dayIdForDate(TODAY);
@@ -70,7 +69,7 @@ describe('Today', () => {
   it('opens on the real weekday, in the week the block start implies', () => {
     const text = screen(<Today />);
     expect(text).toContain('WEEK 03');
-    expect(text).toContain('OVERLOAD'); // week 3 closes wave 1's loading
+    expect(text).toContain('ACCUMULATION'); // weeks 3–5
   });
 
   it('renders a card per prescribed session, and names each one', () => {
@@ -78,8 +77,8 @@ describe('Today', () => {
     const blocks = (['am', 'main', 'later'] as const).filter(
       (block) => exercisesFor(program, TODAY_DAY, block, WEEK).length > 0,
     );
-    // Every day of the block has at least a main session.
-    expect(blocks).toContain('main');
+    // Every day prescribes something — Thursday only its evening stretch.
+    expect(blocks.length).toBeGreaterThan(0);
 
     for (const block of blocks) {
       expect(text, `${TODAY_DAY}/${block} title`).toContain(sessionTitles[TODAY_DAY][block]!);
@@ -103,53 +102,60 @@ describe('Today', () => {
   it('counts a grease-the-groove block in rounds, not exercises', () => {
     const text = screen(<Today />);
     if (exercisesFor(program, TODAY_DAY, 'am', WEEK).length === 0) return; // not a GTG day
-    // Week 3 of the shared rounds table is 3 rounds.
-    expect(text).toContain('3 rounds');
+    // Week 3 of the shared rounds table is 2 rounds.
+    expect(text).toContain('2 rounds');
   });
 });
 
-// Wednesday is the only day that runs all three slots, and it is the reason
-// `later` exists at all — so it is pinned rather than left to whatever weekday
-// the suite happens to run on.
-describe('Today on a Wednesday', () => {
-  // 2026-03-18 is a Wednesday, 10 weeks after this block start: week 11.
-  const WED_BLOCK_START = '2026-01-05';
-  const WEDNESDAY = new Date(2026, 2, 18);
+// Monday and Friday run all three slots; Thursday runs only its evening
+// stretch. Both shapes are pinned rather than left to whatever weekday the
+// suite happens to run on.
+describe('Today on fixed weekdays', () => {
+  const BLOCK_START = '2026-01-05'; // a Monday
 
   beforeEach(() => {
-    vi.setSystemTime(WEDNESDAY);
-    useStore.getState().updateSettings({ blockStartDate: WED_BLOCK_START });
+    useStore.getState().updateSettings({ blockStartDate: BLOCK_START });
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('renders all three sessions, AM through Later', () => {
+  it('renders all three Monday sessions, AM through Later', () => {
+    vi.setSystemTime(new Date(2026, 2, 16)); // Monday of week 11
     const text = screen(<Today />);
     expect(text).toContain('WEEK 11');
-    expect(text).toContain('Front lever grease the groove');
-    expect(text).toContain('Full Body B — front lever, heavy pull, lower body');
-    expect(text).toContain('Recovery run');
+    expect(text).toContain('REALIZATION');
+    expect(text).toContain('Handstand grease the groove');
+    expect(text).toContain('Push A — HSPU priority');
+    expect(text).toContain('Moderate continuous cardio');
   });
 
-  it('shows the recovery run in week 11 but not in week 1', () => {
-    expect(exercisesFor(program, 'wed', 'later', 11)).toHaveLength(1);
+  it('renders Thursday as a rest day with only Flexibility A', () => {
+    vi.setSystemTime(new Date(2026, 0, 8)); // Thursday of week 1
+    const text = screen(<Today />);
+    expect(text).toContain('WEEK 01');
+    expect(text).toContain('Rest + Flexibility A');
+    expect(text).toContain('Flexibility A — pancake, middle split, shoulders');
+    expect(text).toContain('Loaded Cossack squat');
+    expect(text).not.toContain('Main ·');
+    expect(text).not.toContain('AM ·');
+  });
 
-    vi.setSystemTime(new Date(2026, 0, 7)); // Wednesday of week 1
-    const week1 = screen(<Today />);
-    expect(week1).toContain('WEEK 01');
-    expect(week1).toContain('Full Body B — front lever, heavy pull, lower body');
-    expect(week1).not.toContain('Recovery run');
+  it('renders the week-6 deload with its reduced volume', () => {
+    vi.setSystemTime(new Date(2026, 1, 9)); // Monday of week 6
+    const text = screen(<Today />);
+    expect(text).toContain('WEEK 06');
+    expect(text).toContain('DELOAD');
+    expect(text).toContain('1 round');
+    expect(exercisesFor(program, 'mon', 'main', 6).map((e) => e.id)).toContain('hspu-primary');
   });
 });
 
-// The Program screen takes a week and a day, so it can be walked across the
-// whole block without touching the store's notion of "today".
-// The set logger is where the two new metrics actually have to work. A run
-// block prefilled from the prescription and an RPE stepper that reaches 2 are
-// the whole reason `runInterval` and `rpeScale` exist.
-describe('SessionRunner on a run session', () => {
+// The set logger is where the cardio metrics actually have to work. A block
+// prefilled from the prescription and an RPE stepper that reaches 2 are the
+// whole reason `runInterval` and `rpeScale` exist.
+describe('SessionRunner', () => {
   function openSession(date: string, day: DayId, week: number, block: Block) {
     useStore.getState().startSession({ date, block, day, week, phase: phaseForWeek(week) });
     return render(
@@ -161,53 +167,58 @@ describe('SessionRunner on a run session', () => {
     );
   }
 
-  it('prefills a threshold rep at its prescribed 8 minutes, on the run RPE scale', () => {
-    const { text, cleanup } = openSession('2026-01-06', 'tue', 1, 'main');
+  it('prefills the Sunday long cardio at its prescribed 45 minutes, on the run RPE scale', () => {
+    const { text, cleanup } = openSession('2026-01-11', 'sun', 1, 'main');
     cleanups.push(cleanup);
-    // Exercise 1 of 4 is the warm-up: 10 min at RPE 2-3.
-    expect(text).toContain('Warm-up — easy running');
-    expect(text).toContain('10 min');
-    // RPE 2 is only reachable because runs use the 1-10 run scale; the 6-10
+    expect(text).toContain('Long low-intensity cardio');
+    expect(text).toContain('45 min');
+    // RPE 2 is only reachable because cardio uses the 1-10 run scale; the 6-10
     // strength scale would have clamped this to 6.
     expect(text).toContain('2');
   });
 
-  it('opens a Tuesday later session as Flexibility A', () => {
-    const { text, cleanup } = openSession('2026-01-06', 'tue', 1, 'later');
+  it('opens a Thursday later session as Flexibility A', () => {
+    const { text, cleanup } = openSession('2026-01-08', 'thu', 1, 'later');
     cleanups.push(cleanup);
     expect(text).toContain('Loaded Cossack squat');
     expect(text).toContain('1/6');
   });
 
-  it('opens Monday\'s carry with its prescribed 30 m and an added-load field', () => {
+  it('opens Push A on the primary HSPU with five slots', () => {
     const { text, cleanup } = openSession('2026-01-05', 'mon', 1, 'main');
     cleanups.push(cleanup);
-    expect(text).toContain('1/9'); // nine slots in Full Body A
+    expect(text).toContain('1/5');
     expect(text).toContain('Deficit / elevated pike HSPU');
+  });
+
+  it('opens the Friday HIIT on the warm-up with three slots', () => {
+    const { text, cleanup } = openSession('2026-01-09', 'fri', 1, 'later');
+    cleanups.push(cleanup);
+    expect(text).toContain('1/3');
+    expect(text).toContain('Warm-up — easy + accelerations');
   });
 });
 
 describe('Program', () => {
-  it('mounts on Monday of week 1 and shows the AM and Main slots', () => {
+  it('mounts on Monday of week 1 and shows all three slots', () => {
     const text = screen(<Program />);
     expect(text).toContain('Handstand grease the groove');
-    expect(text).toContain('Full Body A');
-    // The GTG rounds table opens at 2 rounds, and the primary HSPU at 4×5 RPE8.
-    expect(text).toContain('4×5 RPE8');
-    // Monday has no later session.
-    expect(text).not.toContain('Later');
+    expect(text).toContain('Push A — HSPU priority');
+    expect(text).toContain('Moderate continuous cardio');
+    // The primary HSPU opens at 4 sets of 4–6 at RPE 8.
+    expect(text).toContain('4×4–6 RPE8');
   });
 
-  it('renders all three RPE tables, since the block trains on three scales', () => {
+  it('renders both RPE tables, since the block trains on two scales', () => {
     const text = screen(<Program />);
-    expect(text).toContain('RPE — Dynamic strength');
-    expect(text).toContain('RPE — Isometric holds');
+    expect(text).toContain('RPE — Resistance training');
     expect(text).toContain('RPE — Flexibility');
+    expect(text).not.toContain('Isometric holds');
   });
 
-  it('labels week 1 as wave 1 baseline', () => {
+  it('labels week 1 as re-entry', () => {
     const text = screen(<Program />);
-    expect(text).toContain('Wave 1');
-    expect(text).toContain('BASELINE');
+    expect(text).toContain('Week 1');
+    expect(text).toContain('RE-ENTRY');
   });
 });

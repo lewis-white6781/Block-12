@@ -15,7 +15,7 @@ import type {
 } from '../domain/types';
 
 export const STORAGE_KEY = 'block12:v1';
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export interface PersistedState {
   schemaVersion: number;
@@ -189,6 +189,26 @@ function migrateToV5(state: LegacyPersistedState): LegacyPersistedState {
 }
 
 /**
+ * v5 -> v6 (v5.0 block): recompute every session phase from its week.
+ *
+ * The v4 names (baseline, reinforce, overload, rebuild, peak, marathonPeak,
+ * taper) describe three loading waves that no longer exist; v5.0 is one arc
+ * with a single deload at week 6. Phase has always been a pure function of
+ * week, so nothing that could not be re-derived is lost. Exercise ids are
+ * untouched — every v4 record that did not carry over moved verbatim into
+ * retiredExercises.ts.
+ */
+function migrateToV6(state: LegacyPersistedState): LegacyPersistedState {
+  const sessionLogs = Object.fromEntries(
+    Object.entries((state.sessionLogs as Record<string, SessionLog>) ?? {}).map(([id, session]) => [
+      id,
+      { ...session, phase: phaseForWeek(session.week) },
+    ]),
+  );
+  return { ...state, sessionLogs };
+}
+
+/**
  * Version-by-version migration so a schema change never wipes a block
  * mid-flight. Guards the zustand `persist` rehydration path AND the JSON
  * import path (`parseImportedState`) with the same logic.
@@ -218,6 +238,10 @@ export function migrate(persistedState: unknown, fromVersion: number): Persisted
 
   if (fromVersion < 5) {
     state = migrateToV5(state);
+  }
+
+  if (fromVersion < 6) {
+    state = migrateToV6(state);
   }
 
   return {

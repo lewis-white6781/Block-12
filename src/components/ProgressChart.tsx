@@ -138,10 +138,10 @@ export default function ProgressChart({ exercise, sessionLogs, dailyEntries, set
                 x1={b.x1}
                 x2={b.x2}
                 fill={`var(--${b.phase})`}
-                fillOpacity={b.phase === 'deload' || b.phase === 'taper' ? 0.16 : 0.06}
+                fillOpacity={b.phase === 'deload' || b.phase === 'consolidation' ? 0.16 : 0.06}
                 ifOverflow="visible"
                 label={
-                  b.phase === 'deload' || b.phase === 'taper'
+                  b.phase === 'deload' || b.phase === 'consolidation'
                     ? { value: b.phase, position: 'insideTop', fill: 'var(--muted)', fontSize: 10 }
                     : undefined
                 }
