@@ -4,6 +4,8 @@ import type { ChangeEvent, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import {
+  buildDailyEntriesCSV,
+  buildSetsCSV,
   defaultPersistedState,
   downloadDailyEntriesCSV,
   downloadJSONExport,
@@ -11,7 +13,19 @@ import {
   ImportError,
   parseImportedState,
   STORAGE_KEY,
+  toPersistedState,
+  triggerDownload,
 } from '../store/persist';
+import {
+  buildDecisionsCSV,
+  buildExercisesCSV,
+  buildManifest,
+  buildPlannedSessionsCSV,
+  buildSessionsCSV,
+  DATA_DICTIONARY,
+} from '../store/analysisPack';
+import { todayISO } from '../domain/clock';
+import CaseStudyCard from '../components/CaseStudyCard';
 import { generateDemoState } from '../dev/demoSeed';
 import { convertWeight, parseWeight } from '../domain/units';
 import { roundTo } from '../domain/format';
@@ -92,6 +106,29 @@ export default function Settings() {
 
   function handleExportDailyCSV() {
     downloadDailyEntriesCSV(state.dailyEntries);
+  }
+
+  /**
+   * v5.1 analysis pack (brief §F): tidy tables + manifest + data dictionary
+   * for independent analysis in Tableau/Python/SQL. Downloads are staggered —
+   * browsers throttle a burst of programmatic downloads from one gesture.
+   */
+  function handleExportAnalysisPack() {
+    const persisted = toPersistedState(state);
+    const date = todayISO();
+    const files: { name: string; contents: string; mime: string }[] = [
+      { name: `block12-sets-${date}.csv`, contents: buildSetsCSV(persisted.sessionLogs), mime: 'text/csv' },
+      { name: `block12-sessions-${date}.csv`, contents: buildSessionsCSV(persisted.sessionLogs), mime: 'text/csv' },
+      { name: `block12-daily-${date}.csv`, contents: buildDailyEntriesCSV(persisted.dailyEntries), mime: 'text/csv' },
+      { name: `block12-planned-sessions-${date}.csv`, contents: buildPlannedSessionsCSV(persisted, date), mime: 'text/csv' },
+      { name: `block12-exercises-${date}.csv`, contents: buildExercisesCSV(), mime: 'text/csv' },
+      { name: `block12-decisions-${date}.csv`, contents: buildDecisionsCSV(persisted.decisionEntries), mime: 'text/csv' },
+      { name: `block12-manifest-${date}.json`, contents: buildManifest(persisted, appVersion, date), mime: 'application/json' },
+      { name: `block12-data-dictionary-${date}.md`, contents: DATA_DICTIONARY, mime: 'text/markdown' },
+    ];
+    files.forEach((file, i) => {
+      setTimeout(() => triggerDownload(file.name, file.contents, file.mime), i * 350);
+    });
   }
 
   function handleImportClick() {
@@ -343,8 +380,21 @@ export default function Settings() {
           >
             Download CSV of daily entries
           </button>
+          <button
+            type="button"
+            onClick={handleExportAnalysisPack}
+            className="min-h-11 w-full rounded border border-line text-sm text-text"
+          >
+            Export analysis pack (8 files)
+          </button>
+          <p className="text-xs text-muted">
+            Analysis pack: sets, sessions, daily, planned sessions, exercises and decisions as
+            tidy CSVs, plus a manifest and data dictionary — for Tableau, Python or SQL.
+          </p>
         </div>
       </Card>
+
+      <CaseStudyCard />
 
       <Card className="mt-4" variant="danger">
         <SectionHeader>Danger zone</SectionHeader>

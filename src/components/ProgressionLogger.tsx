@@ -3,6 +3,7 @@
 // exercise in the same week. This is the only place a ProgressionEvent gets
 // created, so it's also where that check has to live.
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { nextProgressionAxis, oneVariableWarning } from '../domain/analysis';
 import { newId } from '../domain/id';
 import type { Exercise, ProgressionEvent } from '../domain/types';
@@ -32,6 +33,11 @@ export default function ProgressionLogger({
   const [to, setTo] = useState('');
   const [warning, setWarning] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // The event just saved, so the decision-journal prefill can link to it —
+  // v5.1 analytics: journal entries reference ProgressionEvents, never
+  // duplicate a competing change history.
+  const [lastSaved, setLastSaved] = useState<ProgressionEvent | null>(null);
+  const navigate = useNavigate();
 
   function reset() {
     setOpen(false);
@@ -42,7 +48,7 @@ export default function ProgressionLogger({
   }
 
   function save(overrideNote?: string) {
-    onSave({
+    const event: ProgressionEvent = {
       id: newId(),
       date,
       exerciseId: exercise.id,
@@ -50,7 +56,9 @@ export default function ProgressionLogger({
       from,
       to,
       note: overrideNote,
-    });
+    };
+    onSave(event);
+    setLastSaved(event);
     setSaved(true);
     reset();
   }
@@ -66,13 +74,35 @@ export default function ProgressionLogger({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-3 min-h-11 w-full rounded border border-line text-sm text-text"
-      >
-        {saved ? 'Log another progression' : 'Log a progression on this exercise'}
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-3 min-h-11 w-full rounded border border-line text-sm text-text"
+        >
+          {saved ? 'Log another progression' : 'Log a progression on this exercise'}
+        </button>
+        {saved && lastSaved && (
+          <button
+            type="button"
+            onClick={() =>
+              navigate('/decisions', {
+                state: {
+                  prefill: {
+                    source: 'manual',
+                    exerciseId: exercise.id,
+                    evidence: `Progression logged on ${lastSaved.date}: ${lastSaved.axis} — ${lastSaved.from || '?'} → ${lastSaved.to || '?'}.${lastSaved.note ? ` ${lastSaved.note}` : ''}`,
+                    progressionEventId: lastSaved.id,
+                  },
+                },
+              })
+            }
+            className="mt-2 min-h-11 w-full rounded border border-line text-xs text-muted"
+          >
+            Record this in the decision journal
+          </button>
+        )}
+      </>
     );
   }
 

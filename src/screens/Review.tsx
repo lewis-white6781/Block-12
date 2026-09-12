@@ -1,6 +1,7 @@
 // SPEC.md section 7.6.
 import { useMemo, useState } from 'react';
-import { format } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { program } from '../data/program';
 import { exerciseName } from '../data/exercises';
@@ -14,6 +15,8 @@ import { fmtKg, fmtKgSigned } from '../domain/units';
 import { bestBySession, bestOf, formatBest, trendArrow } from '../domain/performance';
 import { buildWeeklyReview, checkEndOfBlockTargets } from '../domain/review';
 import type { TargetStatus } from '../domain/review';
+import { buildWeekCoverage } from '../domain/coverage';
+import { dueFollowUps, weekDecisionCounts } from '../domain/decisions';
 import BenchmarkForm from '../components/BenchmarkForm';
 import PhaseBadge from '../components/PhaseBadge';
 import Card from '../components/Card';
@@ -31,14 +34,42 @@ const STATUS_ICON: Record<TargetStatus, string> = { met: '✓', unmet: '✗', un
 const STATUS_CLASS: Record<TargetStatus, string> = { met: 'text-good', unmet: 'text-bad', unknown: 'text-muted' };
 
 export default function Review() {
+  const navigate = useNavigate();
   const settings = useStore((s) => s.settings);
   const sessionLogs = useStore((s) => s.sessionLogs);
   const dailyEntries = useStore((s) => s.dailyEntries);
   const benchmarkEntries = useStore((s) => s.benchmarkEntries);
   const progressionEvents = useStore((s) => s.progressionEvents);
+  const decisionEntries = useStore((s) => s.decisionEntries);
 
   const today = useToday();
+  const todayStr = format(today, 'yyyy-MM-dd');
   const [selectedWeek, setSelectedWeek] = useState(() => currentWeek(today, settings.blockStartDate));
+
+  // v5.1 analytics: what the week's data can and cannot say. 'unknown' slots
+  // are dates that passed with nothing recorded — visible, and never counted
+  // as "missed".
+  const coverage = useMemo(
+    () =>
+      buildWeekCoverage({
+        week: selectedWeek,
+        blockStartDate: settings.blockStartDate,
+        todayISO: todayStr,
+        program,
+        sessionLogs,
+        dailyEntries,
+      }),
+    [selectedWeek, settings.blockStartDate, todayStr, sessionLogs, dailyEntries],
+  );
+
+  const decisions = useMemo(() => {
+    const weekStart = format(addDays(parseISO(settings.blockStartDate), (selectedWeek - 1) * 7), 'yyyy-MM-dd');
+    const weekEnd = format(addDays(parseISO(settings.blockStartDate), selectedWeek * 7 - 1), 'yyyy-MM-dd');
+    return {
+      counts: weekDecisionCounts(decisionEntries, weekStart, weekEnd),
+      due: dueFollowUps(decisionEntries, sessionLogs, todayStr),
+    };
+  }, [decisionEntries, sessionLogs, settings.blockStartDate, selectedWeek, todayStr]);
 
   const review = useMemo(
     () =>
@@ -114,6 +145,33 @@ export default function Review() {
           <Stat label="AM" value={`${review.sessionsCompleted.am}/${review.sessionsPlanned.am}`} />
           <Stat label="Later" value={`${review.sessionsCompleted.later}/${review.sessionsPlanned.later}`} />
         </div>
+      </Card>
+
+      <Card className="mt-4">
+        <SectionHeader>Data coverage</SectionHeader>
+        <p className="mt-1 text-xs text-muted">
+          What this week's numbers are based on. A day with nothing recorded is unknown — not
+          evidence of a missed session.
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Stat label="Weight" value={`${coverage.weightDays}/7 days`} />
+          <Stat label="Calories" value={`${coverage.nutritionDays}/7 days`} />
+          <Stat
+            label="Sessions"
+            value={`${coverage.completed + coverage.loggedOnly}/${coverage.planned}`}
+            sublabel={
+              coverage.unknown > 0 || coverage.upcoming > 0
+                ? `${coverage.unknown} unknown${coverage.upcoming > 0 ? `, ${coverage.upcoming} upcoming` : ''}`
+                : undefined
+            }
+          />
+        </div>
+        {coverage.retrospectiveEntries > 0 && (
+          <p className="mt-2 text-xs text-muted">
+            {coverage.retrospectiveEntries} daily entr{coverage.retrospectiveEntries === 1 ? 'y' : 'ies'} entered
+            after the day {coverage.retrospectiveEntries === 1 ? 'it describes' : 'they describe'}.
+          </p>
+        )}
       </Card>
 
       <Card className="mt-4">
@@ -208,6 +266,38 @@ export default function Review() {
                 {review.firedFlags.oneVariableOverrides === 1 ? '' : 's'} this week.
               </div>
             )}
+          </div>
+        )}
+      </Card>
+
+      <Card className="mt-4">
+        <div className="flex items-center justify-between gap-2">
+          <SectionHeader>Decisions</SectionHeader>
+          <button
+            type="button"
+            onClick={() => navigate('/decisions')}
+            className="min-h-11 rounded border border-line px-3 text-xs text-text"
+          >
+            Open journal
+          </button>
+        </div>
+        {decisions.counts.total === 0 ? (
+          <p className="mt-2 text-xs text-muted">No decisions recorded this week.</p>
+        ) : (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <Stat label="Recorded" value={String(decisions.counts.total)} />
+            <Stat label="Accepted" value={String(decisions.counts.accepted)} />
+            <Stat label="Overridden" value={String(decisions.counts.overriddenOrRejected)} />
+          </div>
+        )}
+        {decisions.due.length > 0 && (
+          <div className="mt-2 rounded bg-surface-2 px-2 py-1.5 text-xs text-text">
+            {decisions.due.length} follow-up{decisions.due.length === 1 ? '' : 's'} due:{' '}
+            {decisions.due
+              .slice(0, 3)
+              .map((d) => (d.exerciseId ? exerciseName(d.exerciseId) : 'general'))
+              .join(', ')}
+            {decisions.due.length > 3 ? '…' : ''}
           </div>
         )}
       </Card>

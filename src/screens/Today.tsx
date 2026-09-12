@@ -21,6 +21,7 @@ import { useToday } from '../hooks/useToday';
 import { jointVolumeWarnings } from '../domain/readiness';
 import { doNotProgressConditions, isBenchmarkWeek, weeklyProgressionVariables } from '../data/mobility';
 import { detectStagnation } from '../domain/analysis';
+import { dueFollowUps } from '../domain/decisions';
 import { buildPlainHistory } from '../domain/performance';
 import { daysWithLoggedWeight } from '../domain/review';
 import type { Block, Readiness, SessionLog } from '../domain/types';
@@ -176,6 +177,14 @@ export default function Today() {
   );
 
   const progressionEvents = useStore((s) => s.progressionEvents);
+  const decisionEntries = useStore((s) => s.decisionEntries);
+
+  // Decision follow-ups whose observation window has been reached. Shown as a
+  // small nudge, not a card per entry — journalling stays out of the set flow.
+  const followUpsDue = useMemo(
+    () => dueFollowUps(decisionEntries, sessionLogs, format(todayDate, 'yyyy-MM-dd')).length,
+    [decisionEntries, sessionLogs, todayDate],
+  );
 
   // Stagnation card (SPEC.md 7.1 wireframe, "⚠ pike-hspu flat 3 sessions") —
   // checked only against today's own exercises, main first then AM, so at
@@ -297,7 +306,48 @@ export default function Today() {
           >
             {todaysStagnation.type === 'stagnant' ? '⚠ ' : ''}
             {todaysStagnation.message}
+            {/* v5.1: capture the decision WITH its evidence while it is on
+                screen — the journal entry freezes exactly what this card said. */}
+            <button
+              type="button"
+              onClick={() =>
+                navigate('/decisions', {
+                  state: {
+                    prefill: {
+                      source: 'stagnation',
+                      exerciseId: todaysStagnation.exerciseId,
+                      evidence:
+                        todaysStagnation.type === 'recovery'
+                          ? `${todaysStagnation.message} Reasons: ${(todaysStagnation.outOfRangeReasons ?? []).join('; ')}`
+                          : todaysStagnation.message,
+                      recommendation:
+                        todaysStagnation.type === 'stagnant' && todaysStagnation.suggestedAxis
+                          ? `Change one variable: ${todaysStagnation.suggestedAxis}.`
+                          : undefined,
+                    },
+                  },
+                })
+              }
+              className={`mt-2 block min-h-11 w-full rounded text-sm ${
+                todaysStagnation.type === 'stagnant' ? 'bg-bg text-text' : 'border border-line text-text'
+              }`}
+            >
+              Record decision
+            </button>
           </div>
+        )}
+
+        {followUpsDue > 0 && (
+          <button
+            type="button"
+            onClick={() => navigate('/decisions')}
+            className="mt-3 flex min-h-11 w-full items-center justify-between rounded border border-line bg-surface px-3 text-sm text-text"
+          >
+            <span>
+              {followUpsDue} decision follow-up{followUpsDue === 1 ? '' : 's'} due
+            </span>
+            <span className="text-xs text-muted">Open journal →</span>
+          </button>
         )}
 
         {jointWarnings.map((warning) => (

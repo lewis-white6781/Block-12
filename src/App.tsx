@@ -5,6 +5,7 @@ import Progress from './screens/Progress';
 import Body from './screens/Body';
 import Program from './screens/Program';
 import Review from './screens/Review';
+import Decisions from './screens/Decisions';
 import Settings from './screens/Settings';
 import Auth from './screens/Auth';
 import UpdateToast from './components/UpdateToast';
@@ -76,6 +77,7 @@ function App() {
             <Route path="/program" element={<Program />} />
             <Route path="/more" element={<Settings />} />
             <Route path="/review" element={<Review />} />
+            <Route path="/decisions" element={<Decisions />} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="/session/:date/:block" element={<SessionRunner />} />

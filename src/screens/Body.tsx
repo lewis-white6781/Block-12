@@ -5,6 +5,9 @@ import { Bar, BarChart, CartesianGrid, ReferenceArea, ResponsiveContainer, Toolt
 import { useStore } from '../store/useStore';
 import {
   corridorStatus,
+  corridorTargetMismatch,
+  planVarianceKg,
+  plannedWeightOnDate,
   projectedWeekTwelveWeight,
   rolling7Weight,
   totalChangeFromStart,
@@ -52,6 +55,11 @@ export default function Body() {
   const status = corridorStatus(rate);
   const projected = projectedWeekTwelveWeight(entriesArray, todayStr, settings.blockStartDate);
   const totalChange = totalChangeFromStart(entriesArray, todayStr, settings.startWeightKg);
+  // v5.1 metric audit: progress against the chosen 80 -> 73 trajectory, kept
+  // separate from the rate corridor — they answer different questions.
+  const planVariance = planVarianceKg(entriesArray, todayStr, settings);
+  const plannedToday = plannedWeightOnDate(settings, todayStr);
+  const targetMismatch = corridorTargetMismatch(settings);
 
   const last7Days = useMemo(
     () =>
@@ -124,6 +132,22 @@ export default function Body() {
             sublabel={totalChange !== null ? `${fmtKgSigned(totalChange, unit, 1)} ${unit} so far` : undefined}
           />
         </div>
+        <div className="mt-3 border-t border-line pt-3">
+          <Stat
+            label="vs plan"
+            value={planVariance !== null ? `${fmtKgSigned(planVariance, unit)} ${unit}` : '—'}
+            sublabel={`Straight-line ${fmtKg(settings.startWeightKg, unit)} → ${fmtKg(settings.targetWeightKg, unit)} ${unit} says ${fmtKg(plannedToday, unit)} ${unit} today`}
+          />
+          {planVariance !== null && (
+            <p className="mt-1 text-xs text-muted">
+              {planVariance > 0 ? 'Behind' : 'Ahead of'} the target trajectory. The rate badge above
+              judges the current weekly rate, not this.
+            </p>
+          )}
+        </div>
+        {targetMismatch && (
+          <div className="mt-3 rounded bg-warn px-3 py-2 text-xs text-bg">{targetMismatch}</div>
+        )}
       </Card>
 
       <Card className="mt-4">
