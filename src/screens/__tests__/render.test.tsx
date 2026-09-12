@@ -16,6 +16,9 @@ import { format, startOfWeek, subWeeks } from 'date-fns';
 import Today from '../Today';
 import Program from '../Program';
 import SessionRunner from '../SessionRunner';
+import Review from '../Review';
+import Decisions from '../Decisions';
+import CaseStudyCard from '../../components/CaseStudyCard';
 import { program, sessionTitles } from '../../data/program';
 import { startOfToday } from '../../domain/clock';
 import { dayIdForDate, exercisesFor, phaseForWeek } from '../../domain/phase';
@@ -220,5 +223,57 @@ describe('Program', () => {
     const text = screen(<Program />);
     expect(text).toContain('Week 1');
     expect(text).toContain('RE-ENTRY');
+  });
+});
+
+// v5.1 analytics screens. These mount behind the auth gate in the real app, so
+// a headless browser cannot reach them — this is the only runtime check that
+// they do not blank the screen.
+describe('Review (v5.1 cards)', () => {
+  it('mounts with the data-coverage and decisions cards', () => {
+    const text = screen(<Review />);
+    expect(text).toContain('Data coverage');
+    expect(text).toContain('/7 days');
+    expect(text).toContain('Decisions');
+    expect(text).toContain('No decisions recorded this week.');
+  });
+});
+
+describe('Decisions', () => {
+  it('mounts empty with the record action', () => {
+    const text = screen(<Decisions />);
+    expect(text).toContain('Decision journal');
+    expect(text).toContain('Record a decision');
+    expect(text).toContain('No decisions recorded yet.');
+  });
+
+  it('renders a stored entry with its follow-up state', () => {
+    useStore.getState().addDecisionEntry({
+      id: 'render-test-d1',
+      eventDate: BLOCK_START,
+      createdAt: `${BLOCK_START}T12:00:00.000Z`,
+      source: 'stagnation',
+      exerciseId: 'ring-dip',
+      evidence: 'flat 3 sessions at 8 reps',
+      recommendation: 'Change one variable: greater ROM.',
+      ruleVersion: '5.1.0',
+      decision: 'accepted',
+      action: 'added 2.5 kg',
+      followUpSessions: 3,
+    });
+    const text = screen(<Decisions />);
+    expect(text).toContain('Weighted ring dip');
+    expect(text).toContain('Stagnation alert');
+    expect(text).toContain('Action: added 2.5 kg');
+    expect(text).toContain('Waiting — 0/3 comparable sessions');
+  });
+});
+
+describe('CaseStudyCard', () => {
+  it('mounts with no protocol and offers to create one', () => {
+    const text = screen(<CaseStudyCard />);
+    expect(text).toContain('Case study');
+    expect(text).toContain('No protocol recorded yet.');
+    expect(text).toContain('Create protocol');
   });
 });
