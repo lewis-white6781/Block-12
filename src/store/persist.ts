@@ -29,8 +29,8 @@ export interface PersistedState {
 export function defaultSettings(): Settings {
   return {
     blockStartDate: format(startOfWeek(startOfToday(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-    startWeightKg: 77,
-    targetWeightKg: 72.5,
+    startWeightKg: 80,
+    targetWeightKg: 73,
     proteinTargetLow: 170,
     proteinTargetHigh: 190,
     units: 'metric',

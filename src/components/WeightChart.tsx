@@ -1,5 +1,5 @@
 // SPEC.md section 7.4 — weight chart: daily dots + 7-day rolling line + shaded
-// target corridor (77 -> 72.5 kg, ±1 kg band) + dashed projected finish line.
+// target corridor (settings start -> target, 80 -> 73 kg by default, ±1 kg band) + dashed projected finish line.
 import { addDays, format, parseISO } from 'date-fns';
 import {
   Area,

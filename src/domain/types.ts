@@ -199,8 +199,8 @@ export interface ProgressionEvent {
 
 export interface Settings {
   blockStartDate: string; // ISO Monday of week 1
-  startWeightKg: number; // 77
-  targetWeightKg: number; // 72.5
+  startWeightKg: number; // 80 — SPEC-V5.0.md: starting bodyweight ~80 kg
+  targetWeightKg: number; // 73 — 12-week target ~73 kg
   proteinTargetLow: number; // 170
   proteinTargetHigh: number; // 190
   // Unlike protein, SPEC.md gives no numeric carb/fat targets — the user sets
