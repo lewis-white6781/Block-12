@@ -1,7 +1,7 @@
 // Rolling weight average, weekly rate, cut-corridor status — SPEC.md section 6.9.
-import { addDays, format, parseISO, subDays } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, parseISO, subDays } from 'date-fns';
 import { currentWeek } from './phase';
-import type { DailyEntry, SessionLog } from './types';
+import type { DailyEntry, SessionLog, Settings } from './types';
 
 export const TUNING = {
   MIN_ROLLING_POINTS: 4,
@@ -95,6 +95,63 @@ export function totalChangeFromStart(
   const current = rolling7Weight(entries, asOfDate);
   if (current === null) return null;
   return current - startWeightKg;
+}
+
+// ---------------------------------------------------------------------------
+// v5.1 metric audit — progress against the CHOSEN TARGET TRAJECTORY, kept
+// separate from the corridor's configured rate band. The corridor says "is the
+// current rate of loss sensible"; the trajectory says "is the weight where the
+// 80 -> 73 plan said it would be by now". They are different questions and the
+// dashboard must not conflate them. Elapsed time uses actual calendar days
+// from the block start date, not an assumed week count.
+// ---------------------------------------------------------------------------
+
+export const BLOCK_LENGTH_DAYS = 84; // 12 weeks
+
+/** The weekly rate the start -> target plan itself implies (negative on a cut). */
+export function requiredWeeklyRateKg(settings: Settings): number {
+  return (settings.targetWeightKg - settings.startWeightKg) / 12;
+}
+
+/**
+ * Where the straight-line plan says the weight should be on a given date.
+ * Clamped to the block: before day 0 it is the start weight, after day 84 the
+ * target. A trajectory, not a prediction — it assumes nothing about physiology.
+ */
+export function plannedWeightOnDate(settings: Settings, dateISO: string): number {
+  const elapsed = differenceInCalendarDays(parseISO(dateISO), parseISO(settings.blockStartDate));
+  const t = Math.min(1, Math.max(0, elapsed / BLOCK_LENGTH_DAYS));
+  return settings.startWeightKg + (settings.targetWeightKg - settings.startWeightKg) * t;
+}
+
+/**
+ * Rolling-average weight minus the planned trajectory on that date. Positive
+ * means behind the plan (heavier than planned); null when there is no rolling
+ * average yet — never an invented estimate.
+ */
+export function planVarianceKg(entries: DailyEntry[], asOfDate: string, settings: Settings): number | null {
+  const current = rolling7Weight(entries, asOfDate);
+  if (current === null) return null;
+  return current - plannedWeightOnDate(settings, asOfDate);
+}
+
+/**
+ * Flags a start/target/corridor combination that contradicts itself: the rate
+ * the chosen target requires falls outside the configured "on track" band, so
+ * following the corridor cannot reach the target on time. Surfaced as a flag,
+ * never silently "fixed" — changing the target or the corridor is the
+ * athlete's decision.
+ */
+export function corridorTargetMismatch(settings: Settings): string | null {
+  const required = requiredWeeklyRateKg(settings);
+  if (required >= 0) {
+    // Not a cut — the corridor's whole framing doesn't apply.
+    return `Target (${settings.targetWeightKg} kg) is not below start (${settings.startWeightKg} kg); the cut corridor does not apply.`;
+  }
+  if (required > TUNING.CORRIDOR_TOO_SLOW_KG || required < TUNING.CORRIDOR_TOO_FAST_KG) {
+    return `The target requires ${required.toFixed(2)} kg/week, outside the configured on-track band (${TUNING.CORRIDOR_TOO_SLOW_KG} to ${TUNING.CORRIDOR_TOO_FAST_KG} kg/week). Staying "on track" by rate cannot reach the target in 12 weeks.`;
+  }
+  return null;
 }
 
 function mean(values: number[]): number | null {

@@ -19,10 +19,10 @@ import { rolling7Weight } from '../domain/body';
 import { axisFormatter, tooltipFormatter } from './chartFormat';
 import { bestKindFor, plainScore } from '../domain/performance';
 import { phaseForWeek } from '../domain/phase';
-import { est1RMrelative, isQualifyingSet } from '../domain/scoring';
+import { est1RMkg, est1RMrelative, isQualifyingSet } from '../domain/scoring';
 import type { DailyEntry, Exercise, Phase, SessionLog, Settings } from '../domain/types';
 
-type MetricKey = 'best' | 'volume' | 'relative1rm';
+type MetricKey = 'best' | 'volume' | 'relative1rm' | 'absolute1rm';
 
 const UNIT_LABEL: Record<ReturnType<typeof bestKindFor>, string> = {
   reps: 'reps',
@@ -39,6 +39,7 @@ interface WeekPoint {
   best?: number;
   volume?: number;
   relative1rm?: number;
+  absolute1rm?: number;
 }
 
 interface ProgressChartProps {
@@ -61,16 +62,22 @@ function phaseBands(data: WeekPoint[]): { phase: Phase; x1: number; x2: number }
   return bands;
 }
 
-export default function ProgressChart({ exercise, sessionLogs, dailyEntries, settings }: ProgressChartProps) {
+export default function ProgressChart({ exercise, sessionLogs, dailyEntries }: ProgressChartProps) {
   const [metric, setMetric] = useState<MetricKey>('best');
 
   const unit = UNIT_LABEL[bestKindFor(exercise.metric)];
   const metrics: { key: MetricKey; label: string }[] = [
     { key: 'best', label: `Best set (${unit})` },
     { key: 'volume', label: `Total volume (${unit})` },
-    // Only meaningful where there is a load to be relative to.
+    // Only meaningful where there is a load to be relative to. Absolute and
+    // relative are separate series on purpose (v5.1 metric audit): the ratio
+    // rises as bodyweight falls even when absolute output is flat, so one
+    // number cannot answer both "stronger per kg" and "held through the cut".
     ...(exercise.metric === 'weightedReps'
-      ? [{ key: 'relative1rm' as const, label: 'Relative est. 1RM' }]
+      ? [
+          { key: 'absolute1rm' as const, label: 'Est. 1RM (kg)' },
+          { key: 'relative1rm' as const, label: 'Est. 1RM ÷ BW' },
+        ]
       : []),
   ];
 
@@ -85,7 +92,11 @@ export default function ProgressChart({ exercise, sessionLogs, dailyEntries, set
         if (session.week !== week) continue;
         const log = session.exercises.find((e) => e.exerciseId === exercise.id);
         if (!log) continue;
-        const bodyweightKg = rolling7Weight(dailyEntries, session.date) ?? settings.startWeightKg;
+        // v5.1 metric audit: an estimate needs a MEASURED bodyweight near the
+        // session date. When there is no rolling average the point is simply
+        // absent — never backfilled from the configured start weight, which
+        // would be an invented observation.
+        const bodyweightKg = rolling7Weight(dailyEntries, session.date);
 
         for (const set of log.sets) {
           any = true;
@@ -95,16 +106,18 @@ export default function ProgressChart({ exercise, sessionLogs, dailyEntries, set
 
           point.best = point.best === undefined ? value : Math.max(point.best, value);
 
-          if (exercise.metric === 'weightedReps' && set.reps !== undefined) {
+          if (exercise.metric === 'weightedReps' && set.reps !== undefined && bodyweightKg !== null) {
             const relative = est1RMrelative(bodyweightKg, set.addedKg ?? 0, set.reps);
             point.relative1rm = point.relative1rm === undefined ? relative : Math.max(point.relative1rm, relative);
+            const absolute = est1RMkg(bodyweightKg, set.addedKg ?? 0, set.reps);
+            point.absolute1rm = point.absolute1rm === undefined ? absolute : Math.max(point.absolute1rm, absolute);
           }
         }
       }
       if (any) point.volume = totalVolume;
       return point;
     });
-  }, [exercise, sessionLogs, dailyEntries, settings.startWeightKg]);
+  }, [exercise, sessionLogs, dailyEntries]);
 
   const bands = useMemo(() => phaseBands(data), [data]);
   const hasData = data.some((d) => d[metric] !== undefined);

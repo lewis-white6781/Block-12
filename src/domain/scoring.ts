@@ -36,6 +36,17 @@ export function est1RMrelative(bodyweightKg: number, addedKg: number, reps: numb
 }
 
 /**
+ * Absolute Epley estimate in kg: (bodyweight + added) × (1 + reps / 30).
+ * v5.1 metric audit: the relative estimate mechanically rises as bodyweight
+ * falls even when the numerator is flat, so the two must be shown as SEPARATE
+ * series — one answers "am I stronger per kg of me", the other "did the
+ * absolute output hold through the cut". Both are estimates, never tests.
+ */
+export function est1RMkg(bodyweightKg: number, addedKg: number, reps: number): number {
+  return (bodyweightKg + addedKg) * (1 + reps / 30);
+}
+
+/**
  * A set excluded from PR/baseline calculation: any technique flag, RPE 10, or
  * no raw metric value at all. That last case covers v1.0's AM checklist
  * completion markers (`{ techniqueFlags: [], score: 0 }`, no reps/seconds/
