@@ -4,6 +4,66 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-09-12
+
+Analytics case-study release. Block 12 doubles as an applied business-intelligence
+project ("Block 12: Applying Business Intelligence to Personal Training Decisions"),
+so this release adds the evidence layer that makes its numbers defensible:
+what was decided and why, what the data can and cannot say, and exports that let
+the analysis be reproduced independently in Tableau / Python / SQL. The training
+plan itself is untouched — no prescription, RPE target or stop rule changed.
+
+### Added
+
+- **Decision journal** (`/decisions`, linked from More, Review and Today). One
+  entry per decision: source, frozen evidence snapshot, verbatim recommendation
+  with the rule version that produced it, the decision
+  (accepted/deferred/rejected/overridden/manual), the action taken, and an
+  explicit follow-up window. Follow-ups separate the computed observation from
+  the athlete's interpretation, and "not comparable" and "insufficient data"
+  are first-class outcomes. Entries written after the day they describe are
+  labelled retrospective. The stagnation card on Today and a saved progression
+  in the Session Runner prefill an entry (the latter linking the
+  `ProgressionEvent` by id).
+- **Case-study protocol** (More → Case study). A small versioned measurement
+  protocol — question, anchor exercises, baseline/endpoint windows, comparison
+  and missing-data rules — created before reading results. Creation freezes a
+  note about how much data already existed (a protocol recorded after training
+  began is marked retrospective, never presented as preregistration);
+  amendments are append-only with a date and reason. Exports as `protocol.md`.
+- **Analysis pack export** (More → Your data). Eight files: sets, sessions,
+  daily entries, planned sessions (including dates with no log), exercise
+  definitions and decisions as tidy CSVs, plus a provenance manifest
+  (versions, counts, weekly coverage, demo-data flag) and a data dictionary
+  documenting grain, join keys and the daily-grain join trap.
+- **Data coverage card** in Review: weight and calorie days out of 7, sessions
+  against the planned denominator, with "unknown" (date passed, nothing
+  recorded) explicitly distinct from a missed session, and retrospectively
+  entered daily entries counted.
+- **Decisions card** in Review: per-week counts (recorded / accepted /
+  overridden) and due follow-ups.
+- **"vs plan" stat** on Body: the rolling average against the straight-line
+  80 → 73 kg trajectory using real elapsed days — separate from the existing
+  rate-corridor badge, which judges the weekly rate. A settings combination
+  whose required rate the corridor cannot deliver is flagged, never silently
+  reconciled.
+- **Absolute est. 1RM (kg)** series on weighted-rep charts, alongside the
+  bodyweight-relative one. The relative ratio mechanically rises as bodyweight
+  falls, so the two are now separate, both labelled estimates.
+
+### Changed
+
+- `SCHEMA_VERSION` 6 → 7: adds `decisionEntries` and `caseStudyProtocol`
+  (empty defaults; purely additive). Both sync via LWW merge and respect the
+  reset tombstone. **Supabase needs `supabase/migration-v5.1-analytics.sql`
+  run once before deploying this build.**
+- Est. 1RM chart points now require a measured rolling-average bodyweight near
+  the session date; the silent fallback to the configured start weight was an
+  invented observation and is gone.
+- The dev demo seed stamps `settings.demoSeededAt`, and the analysis-pack
+  manifest surfaces it, so synthetic data can never pass as genuine
+  case-study evidence unnoticed.
+
 ## [5.0.0] - 2026-09-12
 
 The block changed goal again. It is now a **calisthenics-priority cut** — 80 kg
