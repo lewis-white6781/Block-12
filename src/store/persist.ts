@@ -8,14 +8,16 @@ import { phaseForWeek } from '../domain/phase';
 import { placeholderSetScore } from '../domain/scoring';
 import type {
   BenchmarkEntry,
+  CaseStudyProtocol,
   DailyEntry,
+  DecisionEntry,
   ProgressionEvent,
   SessionLog,
   Settings,
 } from '../domain/types';
 
 export const STORAGE_KEY = 'block12:v1';
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export interface PersistedState {
   schemaVersion: number;
@@ -24,6 +26,8 @@ export interface PersistedState {
   sessionLogs: Record<string, SessionLog>;
   benchmarkEntries: Record<string, BenchmarkEntry>;
   progressionEvents: ProgressionEvent[];
+  decisionEntries: Record<string, DecisionEntry>;
+  caseStudyProtocol: CaseStudyProtocol | null;
 }
 
 export function defaultSettings(): Settings {
@@ -47,6 +51,8 @@ export function defaultPersistedState(): PersistedState {
     sessionLogs: {},
     benchmarkEntries: {},
     progressionEvents: [],
+    decisionEntries: {},
+    caseStudyProtocol: null,
   };
 }
 
@@ -209,6 +215,21 @@ function migrateToV6(state: LegacyPersistedState): LegacyPersistedState {
 }
 
 /**
+ * v6 -> v7 (v5.1 analytics): two new top-level collections, the decision
+ * journal and the case-study protocol. Purely additive — no stored record
+ * changes shape, so the migration only supplies empty defaults. Both are
+ * evidence stores for the analytics case study; nothing in the training rules
+ * reads them, so absence is always a valid state.
+ */
+function migrateToV7(state: LegacyPersistedState): LegacyPersistedState {
+  return {
+    ...state,
+    decisionEntries: state.decisionEntries ?? {},
+    caseStudyProtocol: state.caseStudyProtocol ?? null,
+  };
+}
+
+/**
  * Version-by-version migration so a schema change never wipes a block
  * mid-flight. Guards the zustand `persist` rehydration path AND the JSON
  * import path (`parseImportedState`) with the same logic.
@@ -244,6 +265,10 @@ export function migrate(persistedState: unknown, fromVersion: number): Persisted
     state = migrateToV6(state);
   }
 
+  if (fromVersion < 7) {
+    state = migrateToV7(state);
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
     // updatedAt is NOT re-stamped here. migrate() runs on the REMOTE state on
@@ -259,6 +284,8 @@ export function migrate(persistedState: unknown, fromVersion: number): Persisted
     sessionLogs: state.sessionLogs ?? {},
     benchmarkEntries: state.benchmarkEntries ?? {},
     progressionEvents: state.progressionEvents ?? [],
+    decisionEntries: state.decisionEntries ?? {},
+    caseStudyProtocol: state.caseStudyProtocol ?? null,
   };
 }
 
@@ -271,6 +298,8 @@ const PERSISTED_KEYS: (keyof PersistedState)[] = [
   'sessionLogs',
   'benchmarkEntries',
   'progressionEvents',
+  'decisionEntries',
+  'caseStudyProtocol',
 ];
 
 /** Pulls only the persisted fields off the store (drops zustand actions). */
@@ -307,7 +336,7 @@ export function parseImportedState(json: string): PersistedState {
   return toPersistedState(migrated);
 }
 
-function triggerDownload(filename: string, contents: string, mimeType: string): void {
+export function triggerDownload(filename: string, contents: string, mimeType: string): void {
   const blob = new Blob([contents], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -351,7 +380,7 @@ const CSV_HEADERS = [
   'score',
 ];
 
-function csvEscape(value: unknown): string {
+export function csvEscape(value: unknown): string {
   if (value === undefined || value === null) return '';
   const str = String(value);
   if (/[",\n]/.test(str)) {

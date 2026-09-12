@@ -39,6 +39,10 @@ interface BlockStateRow {
   session_logs: unknown;
   benchmark_entries: unknown;
   progression_events: unknown;
+  // v5.1 analytics columns. Nullable in Postgres so a row written by an older
+  // build still pulls cleanly — migrate() backfills the empty defaults.
+  decision_entries: unknown;
+  case_study_protocol: unknown;
   updated_at: string;
 }
 
@@ -64,6 +68,8 @@ async function pullRemote(userId: string): Promise<PullResult> {
         sessionLogs: row.session_logs,
         benchmarkEntries: row.benchmark_entries,
         progressionEvents: row.progression_events,
+        decisionEntries: row.decision_entries ?? undefined,
+        caseStudyProtocol: row.case_study_protocol ?? undefined,
       },
       row.schema_version,
     ),
@@ -90,6 +96,8 @@ async function pushRemote(userId: string, state: PersistedState): Promise<void> 
     session_logs: state.sessionLogs,
     benchmark_entries: state.benchmarkEntries,
     progression_events: state.progressionEvents,
+    decision_entries: state.decisionEntries,
+    case_study_protocol: state.caseStudyProtocol,
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabase.from(TABLE).upsert(row, { onConflict: 'user_id' });

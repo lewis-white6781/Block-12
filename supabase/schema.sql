@@ -32,3 +32,8 @@ create policy "update own state" on public.block_state
 
 -- No delete policy: this single-user app never deletes the cloud row from client code.
 -- If a wipe is ever needed, do it from the Supabase dashboard.
+
+-- v5.1 analytics: decision journal + case-study protocol. Nullable so a row
+-- written by an older build is still valid; the client backfills defaults.
+alter table public.block_state add column if not exists decision_entries jsonb;
+alter table public.block_state add column if not exists case_study_protocol jsonb;

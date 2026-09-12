@@ -7,8 +7,10 @@ import { newId } from '../domain/id';
 import type {
   BenchmarkEntry,
   Block,
+  CaseStudyProtocol,
   DailyEntry,
   DayId,
+  DecisionEntry,
   ExerciseLog,
   Phase,
   ProgressionEvent,
@@ -40,6 +42,19 @@ interface StoreActions {
   /** One entry per (date, week) pair — replaces any existing entry for that week. updatedAt is stamped by the reducer. */
   upsertBenchmarkEntry: (entry: Omit<BenchmarkEntry, 'updatedAt'>) => void;
   addProgressionEvent: (event: ProgressionEvent) => void;
+  /** updatedAt is stamped by the reducer. Evidence text is frozen at creation. */
+  addDecisionEntry: (entry: Omit<DecisionEntry, 'updatedAt'>) => void;
+  /**
+   * Patches one journal entry (used to record a follow-up or link a
+   * ProgressionEvent). The frozen decision-time fields — evidence,
+   * recommendation, eventDate, createdAt — are deliberately not patchable.
+   */
+  updateDecisionEntry: (
+    id: string,
+    patch: Partial<Pick<DecisionEntry, 'followUp' | 'progressionEventId' | 'reason' | 'expectedObservation'>>,
+  ) => void;
+  /** Creates or replaces the protocol; amendments append inside the object. */
+  saveCaseStudyProtocol: (protocol: Omit<CaseStudyProtocol, 'updatedAt'>) => void;
 }
 
 export type StoreState = PersistedState & StoreActions;
@@ -156,6 +171,29 @@ export const useStore = create<StoreState>()(
 
       addProgressionEvent: (event) =>
         set((s) => ({ progressionEvents: [...s.progressionEvents, event] })),
+
+      addDecisionEntry: (entry) =>
+        set((s) => ({
+          decisionEntries: {
+            ...s.decisionEntries,
+            [entry.id]: { ...entry, updatedAt: new Date().toISOString() },
+          },
+        })),
+
+      updateDecisionEntry: (id, patch) =>
+        set((s) => {
+          const existing = s.decisionEntries[id];
+          if (!existing) return {};
+          return {
+            decisionEntries: {
+              ...s.decisionEntries,
+              [id]: { ...existing, ...patch, updatedAt: new Date().toISOString() },
+            },
+          };
+        }),
+
+      saveCaseStudyProtocol: (protocol) =>
+        set(() => ({ caseStudyProtocol: { ...protocol, updatedAt: new Date().toISOString() } })),
     }),
     {
       name: STORAGE_KEY,

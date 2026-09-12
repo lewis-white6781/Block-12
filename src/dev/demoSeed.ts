@@ -313,10 +313,19 @@ export function generateDemoState(): PersistedState {
 
   return {
     schemaVersion: 3,
-    settings: { ...defaultSettings(), blockStartDate, updatedAt: new Date().toISOString() },
+    // demoSeededAt marks every export built from this state as synthetic —
+    // demo data must never pass as a genuine case-study observation.
+    settings: {
+      ...defaultSettings(),
+      blockStartDate,
+      demoSeededAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
     dailyEntries,
     sessionLogs,
     benchmarkEntries,
     progressionEvents,
+    decisionEntries: {},
+    caseStudyProtocol: null,
   };
 }

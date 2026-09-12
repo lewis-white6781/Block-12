@@ -1,7 +1,14 @@
 // Multi-device sync merge algorithm — last-write-wins per entity key.
 // Pure function, zero dependencies on Supabase/React/zustand.
 import type { PersistedState } from '../store/persist';
-import type { BenchmarkEntry, DailyEntry, ProgressionEvent, SessionLog } from '../domain/types';
+import type {
+  BenchmarkEntry,
+  CaseStudyProtocol,
+  DailyEntry,
+  DecisionEntry,
+  ProgressionEvent,
+  SessionLog,
+} from '../domain/types';
 
 /**
  * `resetAt` is the tombstone cutoff — SPEC-V3.0.md section 6.
@@ -56,7 +63,25 @@ export function mergeState(local: PersistedState, remote: PersistedState): Persi
     sessionLogs: mergeByKeyLWW<SessionLog>(local.sessionLogs, remote.sessionLogs, resetAt),
     benchmarkEntries: mergeByKeyLWW<BenchmarkEntry>(local.benchmarkEntries, remote.benchmarkEntries, resetAt),
     progressionEvents: mergeProgressionEvents(local.progressionEvents, remote.progressionEvents, resetAt),
+    decisionEntries: mergeByKeyLWW<DecisionEntry>(local.decisionEntries, remote.decisionEntries, resetAt),
+    caseStudyProtocol: mergeProtocol(local.caseStudyProtocol, remote.caseStudyProtocol, resetAt),
   };
+}
+
+/**
+ * Single-record LWW with the same tombstone rule as the keyed collections:
+ * a remote protocol older than the reset was deleted by it, and the local
+ * copy (whatever it is) is never dropped by a merge.
+ */
+function mergeProtocol(
+  local: CaseStudyProtocol | null,
+  remote: CaseStudyProtocol | null,
+  resetAt: string | undefined,
+): CaseStudyProtocol | null {
+  const r = remote && !isTombstoned(remote, resetAt) ? remote : null;
+  if (!local) return r;
+  if (!r) return local;
+  return r.updatedAt > local.updatedAt ? r : local;
 }
 
 function mergeProgressionEvents(
