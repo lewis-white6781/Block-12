@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-10-11
+
+The Cut to New Year block. A new 12-week plan starting Sunday 11 October 2026,
+with the previous block's data wiped. See SPEC-V6.0.md.
+
+### Changed
+
+- **New programme**, transcribed from `cut-to-new-year-training-nutrition.md`:
+  Upper A (Mon), Upper B (Thu), Mobility + Core (Sat), Lower (Sun). ★ exercises
+  follow the "Sets by phase" table; everything else runs 3 sets (2 in week 5).
+- **New phases**: Build 1, Build 2, Deload (week 5), Build 3, Peak + test,
+  Christmas. Weeks 11–12 run the floor session only.
+- RPE 10 no longer warns in the peak weeks that prescribe it.
+- The weight-rate corridor is the nutrition rules' 0.25–0.75 kg/week.
+- Review's end-of-block checklist is the target weight plus each ★ lift's
+  weeks 9–10 test against week 1, shown from week 10.
+- The Program screen shows the plan's "Sets by phase" table, dated from the
+  block start, in place of the v5 reference cards.
+
+### Added
+
+- **Daily tick boxes**: handstand + mobility every day, football on Wednesday
+  and Friday. Counted in Review and exported in the daily CSV.
+- **Nutrition targets** from the plan's table by 7-day average weight, shown
+  under each day's calories, protein, carbs and fat.
+- **Weekly calorie check**: from week 3, if the weight isn't moving at
+  0.25–0.75 kg/week *and* you ate to target, it recommends −150 / +150 kcal
+  (through carbs) with a one-tap apply and an undo. If intake was off target,
+  it says so instead of moving the target.
+
+### Removed
+
+- Grease-the-groove, cardio and flexibility sessions; flexibility benchmarks;
+  the manual protein/carb/fat target settings. The v5.0 records are retired
+  verbatim in `src/data/retiredV5.ts`.
+
+### Migration
+
+- Schema v8 wipes the previous block deterministically, so it is safe across
+  devices and sync. Day-1 weigh-ins survive; the start weight is seeded from
+  the old block's last 7-day average. Export JSON first if you want a copy of
+  the old block — importing it later runs through the same wipe.
+
 ## [5.1.0] - 2026-09-12
 
 Analytics case-study release. Block 12 doubles as an applied business-intelligence
