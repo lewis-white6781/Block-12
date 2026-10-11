@@ -12,14 +12,14 @@ import {
 import type { GuardrailFiring, StagnationResult, StopRuleResult } from './analysis';
 import { corridorStatus, rolling7Calories, rolling7Carbs, rolling7Fat, rolling7Weight, weeklyRateKg } from './body';
 import type { CorridorStatus } from './body';
-import { benchmarks, isBenchmarkWeek } from '../data/mobility';
-import { program } from '../data/program';
+import { isBenchmarkWeek } from '../data/mobility';
+import { dailyChecks, program } from '../data/program';
+import { PEAK_TEST_EXERCISE_IDS, PEAK_TEST_WEEKS } from '../data/targets';
+import { dailyTargets } from './nutrition';
 import { dayIdForDate, exercisesFor, phaseForWeek } from './phase';
-import { bestAsOf, bestBySession, bestOverall, buildPlainHistory, trend } from './performance';
+import { bestAsOf, bestBySession, bestOf, bestOverall, buildPlainHistory, compareBests, trend } from './performance';
 import type { Best, Trend } from './performance';
-import { isQualifyingSet } from './scoring';
 import type {
-  BenchmarkEntry,
   Block,
   DailyEntry,
   DayId,
@@ -51,13 +51,14 @@ export function plannedSessions(week: number): Record<Block, number> {
   return counts;
 }
 
+// Read off the "Sets by phase" table, SPEC-V6.0.md section 3.
 export const PHASE_NOTES: Record<Phase, string> = {
-  reentry: 'Establish the post-break baseline around RPE 8. Honest numbers on every movement — everything after this is measured against them.',
-  accumulation: 'Sets and difficulty climb gradually. Add one variable at a time; never ROM and load together.',
-  deload: 'Mandatory. Volume down 40–50%, RPE 6–7, same exercises, no failure, no skill tests. Leave it eager to train hard again.',
-  intensification: 'Harder leverage and heavier loading. The bodyweight is lower now, so the same absolute load is real progress.',
-  realization: 'The highest-quality hard work of the block, without failure. Nothing new — express what was built.',
-  consolidation: 'Lower volume. Measure the six flexibility chains, compare every benchmark against week 1, and do not test to failure.',
+  build1: '★ exercises 3 sets at RPE 8–8.5; everything else 3 sets. Set honest baselines — the rest of the block is measured against them.',
+  build2: '★ exercises up to 4 sets at RPE 8.5. Top of the rep range on every set earns a harder progression or +1.25–2.5 kg.',
+  deload: '★ exercises 2 sets at RPE 6–7; everything else 2 sets. Same exercises, no failure.',
+  build3: '★ exercises 4 sets at RPE 8.5–9. Harder progressions where the rep range is topped out.',
+  peak: 'Peak + test: ★ exercises 4–5 sets at RPE 9.5–10. Test the ★ lifts against week 1.',
+  christmas: 'Floor sessions only — exercises 1–3 on the upper days, warm-up + 1, 2, 4 on Lower, 1–4 on Mobility + Core.',
 };
 
 export interface WeeklyReview {
@@ -76,6 +77,8 @@ export interface WeeklyReview {
     meanCarbsG: number | null;
     meanFatG: number | null;
   };
+  /** v6.0: each daily tick box, ticked days vs the days it was due. */
+  checks: { id: string; label: string; done: number; planned: number }[];
   // v3.0: plain bests in the movement's own unit instead of a unitless index
   // (SPEC-V3.0.md section 2). `previous` is the best as of the end of the
   // prior week, so the pair reads "was X, now Y".
@@ -177,10 +180,24 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
   const meanKg = rolling7Weight(dailyEntriesArray, end);
   const rateKg = weeklyRateKg(dailyEntriesArray, end);
   const weekEntries = dailyEntriesArray.filter((e) => e.date >= start && e.date <= end);
+  // v6.0: rule 2 makes protein a floor to hit, not a band — and the floor is
+  // the nutrition table's, for that day's weight row.
   const proteinAdherenceDays = weekEntries.filter(
-    (e) =>
-      e.proteinG !== undefined && e.proteinG >= settings.proteinTargetLow && e.proteinG <= settings.proteinTargetHigh,
+    (e) => e.proteinG !== undefined && e.proteinG >= dailyTargets(dailyEntriesArray, settings, e.date).proteinG,
   ).length;
+
+  // --- daily tick boxes: done vs planned this week ---
+  const checks = dailyChecks.map((check) => {
+    let planned = 0;
+    let done = 0;
+    for (let i = 0; i < 7; i++) {
+      const date = format(addDays(parseISO(start), i), 'yyyy-MM-dd');
+      if (!check.days.includes(dayIdForDate(parseISO(date)))) continue;
+      planned++;
+      if (dailyEntries[date]?.checks?.[check.id]) done++;
+    }
+    return { id: check.id, label: check.label, done, planned };
+  });
   const meanCalories = rolling7Calories(dailyEntriesArray, end);
   const meanCarbsG = rolling7Carbs(dailyEntriesArray, end);
   const meanFatG = rolling7Fat(dailyEntriesArray, end);
@@ -268,6 +285,7 @@ export function buildWeeklyReview(input: ReviewInput): WeeklyReview {
     sessionsPlanned: planned,
     weight: { meanKg, rateKgPerWeek: rateKg, status: corridorStatus(rateKg) },
     nutrition: { proteinAdherenceDays, meanCalories, meanCarbsG, meanFatG },
+    checks,
     skillDeltas,
     firedFlags: { stagnation, guardrails, stopRules, oneVariableOverrides },
     nextWeek,
@@ -293,85 +311,42 @@ export interface TargetCheckGroup {
   items: TargetCheckItem[];
 }
 
-function bestQualifyingSetInWeek(
+/** Best qualifying set of an exercise across the given weeks, in its own unit. */
+function bestInWeeks(
   sessionLogs: Record<string, SessionLog>,
-  exerciseId: string,
-  week: number,
-): { seconds?: number; reps?: number; addedKg?: number; variantId?: string; assistanceTier?: number } | undefined {
-  let best: ReturnType<typeof bestQualifyingSetInWeek> = undefined;
-  let bestValue = -Infinity;
-  for (const session of Object.values(sessionLogs)) {
-    if (session.week !== week) continue;
-    const log = session.exercises.find((e) => e.exerciseId === exerciseId);
-    if (!log) continue;
-    for (const set of log.sets) {
-      if (!isQualifyingSet(set)) continue;
-      const value = set.seconds ?? set.reps ?? 0;
-      if (value > bestValue) {
-        bestValue = value;
-        best = set;
-      }
-    }
-  }
-  return best;
+  exercise: Exercise,
+  weeks: number[],
+): Best | null {
+  return bestOf(
+    bestBySession(sessionLogs, exercise)
+      .filter((h) => weeks.includes(h.week))
+      .map((h) => h.best),
+  );
 }
 
 export function checkEndOfBlockTargets(input: {
   targetGroups: { id: string; label: string; items: string[] }[];
+  program: Exercise[];
   sessionLogs: Record<string, SessionLog>;
   dailyEntries: Record<string, DailyEntry>;
-  benchmarkEntries: Record<string, BenchmarkEntry>;
   settings: Settings;
-  /**
-  * Best across the last few sessions as a percentage of the weeks 1-2
-  * baseline, in the movement's own unit. v3.0 replacement for the Exercise
-  * Progress Index (SPEC-V3.0.md section 1) — the "broadly maintained" and
-  * "no decline" targets below genuinely need a ratio, they just no longer
-  * need a difficulty multiplier baked into it.
-  */
-  week12RetentionPct: (exerciseId: string) => number | null;
   /** Date the "current" weight target is evaluated as-of (caller supplies "today"). */
   asOfDate: string;
 }): TargetCheckGroup[] {
-  const { targetGroups, sessionLogs, dailyEntries, benchmarkEntries, settings, asOfDate } = input;
-  const dailyEntriesArray = Object.values(dailyEntries);
-  const currentWeightKg = rolling7Weight(dailyEntriesArray, asOfDate);
+  const { targetGroups, sessionLogs, dailyEntries, settings, asOfDate } = input;
+  const currentWeightKg = rolling7Weight(Object.values(dailyEntries), asOfDate);
 
   /**
-   * Longest total time spent on one exercise in a single session, in minutes.
-   * A cardio session may be logged as several blocks, so its duration is
-   * the SUM of a session's sets, not the best of them.
+   * Did the peak-test best (weeks 9–10) match or beat the week-1 best? Read
+   * with compareBests, so a weighted lift is judged on load first, then reps.
    */
-  function longestSessionMinutes(exerciseId: string): number | null {
-    let longest: number | null = null;
-    for (const session of Object.values(sessionLogs)) {
-      const log = session.exercises.find((e) => e.exerciseId === exerciseId);
-      if (!log) continue;
-      const total = log.sets.reduce((sum, set) => sum + (set.minutes ?? 0), 0);
-      if (total > 0 && (longest === null || total > longest)) longest = total;
-    }
-    return longest;
-  }
-
-  /** Most sets logged for one exercise in a single session — the HIIT interval count. */
-  function mostSetsInOneSession(exerciseId: string): number | null {
-    let most: number | null = null;
-    for (const session of Object.values(sessionLogs)) {
-      const log = session.exercises.find((e) => e.exerciseId === exerciseId);
-      if (!log) continue;
-      const n = log.sets.filter(isQualifyingSet).length;
-      if (n > 0 && (most === null || n > most)) most = n;
-    }
-    return most;
-  }
-
-  /** Did a week-12 best beat the same exercise's week-1 best, in its own unit? */
-  function improvedSinceWeek1(exerciseId: string): TargetStatus {
-    const first = bestQualifyingSetInWeek(sessionLogs, exerciseId, 1);
-    const last = bestQualifyingSetInWeek(sessionLogs, exerciseId, 12);
-    if (!first || !last) return 'unknown';
-    const value = (s: typeof first) => s?.seconds ?? s?.reps ?? 0;
-    return value(last) >= value(first) ? 'met' : 'unmet';
+  function peakBeatsWeek1(exerciseId: string): TargetStatus {
+    const exercise = input.program.find((e) => e.id === exerciseId);
+    if (!exercise) return 'unknown';
+    const first = bestInWeeks(sessionLogs, exercise, [1]);
+    const peak = bestInWeeks(sessionLogs, exercise, PEAK_TEST_WEEKS);
+    if (!first || !peak) return 'unknown';
+    return compareBests(peak, first) <= 0 ? 'met' : 'unmet';
   }
 
   function status(id: string, index: number): TargetStatus {
@@ -381,75 +356,13 @@ export function checkEndOfBlockTargets(input: {
       if (currentWeightKg === null) return 'unknown';
       return currentWeightKg <= settings.targetWeightKg + 0.5 ? 'met' : 'unmet';
     }
-
-    // Front lever: hardest clean 5–8 s progression, open advanced tuck or beyond.
-    if (id === 'frontLever' && index === 0) {
-      const best = bestQualifyingSetInWeek(sessionLogs, 'fl-hold-primary', 12);
-      if (!best) return 'unknown';
-      const advanced = ['open-advanced-tuck', 'one-leg', 'alternating-one-leg', 'assisted-straddle', 'straddle', 'half-lay', 'lightly-assisted-full', 'full'];
-      if (!best.variantId || !advanced.includes(best.variantId)) return 'unmet';
-      return (best.seconds ?? 0) >= 5 ? 'met' : 'unmet';
-    }
-
-    // HSPU: primary pike HSPU and the wall-assisted secondary, both week 1 -> 12.
-    if (id === 'hspu' && index === 0) return improvedSinceWeek1('hspu-primary');
-    if (id === 'hspu' && index === 1) return improvedSinceWeek1('hspu-secondary');
-
-    // Strength: the block's promise through a cut is to HOLD these. 95% of the
-    // block best is 'held'.
-    if (id === 'strength' && index === 0) {
-      const dip = input.week12RetentionPct('ring-dip');
-      return dip === null ? 'unknown' : dip >= 95 ? 'met' : 'unmet';
-    }
-    if (id === 'strength' && index === 1) {
-      const pullup = input.week12RetentionPct('ring-pullup');
-      return pullup === null ? 'unknown' : pullup >= 95 ? 'met' : 'unmet';
-    }
-    if (id === 'strength' && index === 2) {
-      const hack = input.week12RetentionPct('hack-squat');
-      return hack === null ? 'unknown' : hack >= 95 ? 'met' : 'unmet';
-    }
-
-    // Core: the three movements with a ladder behind them.
-    if (id === 'core' && index === 0) return improvedSinceWeek1('dragon-flag');
-    if (id === 'core' && index === 1) return improvedSinceWeek1('standing-ab-wheel');
-    if (id === 'core' && index === 2) return improvedSinceWeek1('windshield-wiper');
-
-    // Flexibility: every one of the six chains moved the right way between the
-    // week-1 and week-12 measurements. Three of them are lower-better.
-    if (id === 'flexibility' && index === 0) {
-      const first = benchmarkEntries['1'];
-      const last = benchmarkEntries['12'];
-      if (!first || !last) return 'unknown';
-      const measured = benchmarks.filter(
-        (b) => first.values[b.id] !== undefined && last.values[b.id] !== undefined,
-      );
-      if (measured.length === 0) return 'unknown';
-      const improved = measured.every((b) =>
-        b.direction === 'lower-better'
-          ? last.values[b.id] < first.values[b.id]
-          : last.values[b.id] > first.values[b.id],
-      );
-      return improved ? 'met' : 'unmet';
-    }
-
-    // Cardio: the three sessions' peak volumes from SPEC-V5.0.md section 4.
-    if (id === 'cardio' && index === 0) {
-      const longest = longestSessionMinutes('mon-moderate-cardio');
-      return longest === null ? 'unknown' : longest >= 30 ? 'met' : 'unmet';
-    }
-    if (id === 'cardio' && index === 1) {
-      const most = mostSetsInOneSession('fri-hiit-intervals');
-      return most === null ? 'unknown' : most >= 8 ? 'met' : 'unmet';
-    }
-    if (id === 'cardio' && index === 2) {
-      const longest = longestSessionMinutes('sun-long-cardio');
-      return longest === null ? 'unknown' : longest >= 80 ? 'met' : 'unmet';
+    if (id === 'test') {
+      const exerciseId = PEAK_TEST_EXERCISE_IDS[index];
+      return exerciseId ? peakBeatsWeek1(exerciseId) : 'unknown';
     }
     return 'unknown';
   }
 
-  void settings;
   return targetGroups.map((group) => ({
     id: group.id,
     label: group.label,

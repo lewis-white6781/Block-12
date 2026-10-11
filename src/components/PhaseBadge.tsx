@@ -3,12 +3,12 @@ import type { Phase } from '../domain/types';
 import SyncPill from './SyncPill';
 
 const PHASE_LABEL: Record<Phase, string> = {
-  reentry: 'RE-ENTRY',
-  accumulation: 'ACCUMULATION',
+  build1: 'BUILD 1',
+  build2: 'BUILD 2',
   deload: 'DELOAD',
-  intensification: 'INTENSIFICATION',
-  realization: 'REALIZATION',
-  consolidation: 'CONSOLIDATION',
+  build3: 'BUILD 3',
+  peak: 'PEAK + TEST',
+  christmas: 'CHRISTMAS',
 };
 
 interface PhaseBadgeProps {

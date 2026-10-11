@@ -1,13 +1,13 @@
 // ---------- program (static, seeded) ----------
-// v4.0: three four-week loading waves replace the old single-arc periodisation.
-// Deloads now fall on weeks 4, 8 and 12 — see SPEC-V4.0.md section 3.
+// v6.0: the Cut to New Year block — five named phases plus a floor-only
+// Christmas fortnight. One deload, at week 5. See SPEC-V6.0.md section 3.
 export type Phase =
-  | 'reentry' // weeks 1–2  — establish the post-break baseline around RPE 8
-  | 'accumulation' // weeks 3–5  — sets and difficulty climb
-  | 'deload' // week 6    — volume −40–50%, RPE 6–7
-  | 'intensification' // weeks 7–10 — harder leverage, heavier loading
-  | 'realization' // week 11   — highest-quality hard work, no failure
-  | 'consolidation'; // week 12   — lower volume, benchmark and compare
+  | 'build1' // weeks 1–2   — ★ 3 sets @ RPE 8–8.5
+  | 'build2' // weeks 3–4   — ★ 4 sets @ RPE 8.5
+  | 'deload' // week 5      — ★ 2 sets @ RPE 6–7, everything else 2 sets
+  | 'build3' // weeks 6–8   — ★ 4 sets @ RPE 8.5–9
+  | 'peak' // weeks 9–10  — ★ 4–5 sets @ RPE 9.5–10, peak + test
+  | 'christmas'; // weeks 11–12 — floor sessions only
 
 export type DayId = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
@@ -174,7 +174,24 @@ export interface DailyEntry {
   caloriesOverridden?: boolean;
   steps?: number; // optional
   note?: string;
+  // v6.0: the day's tick-box habits — handstand + mobility every day, football
+  // on Wed/Fri. Keyed by DailyCheck.id in src/data/program.ts. Stored here, not
+  // as a SessionLog, because the plan prescribes them as done/not done with
+  // nothing to log inside them (SPEC-V6.0.md section 2).
+  checks?: Record<string, boolean>;
   updatedAt: string; // ISO timestamp
+}
+
+/**
+ * One applied change to the daily calorie target — SPEC-V6.0.md section 6.
+ * The plan's rules 3 and 4 move calories in 150 kcal steps, taken from or added
+ * to carbs. Adjustments are cumulative and dated: a day's target is its table
+ * row plus every adjustment dated on or before it.
+ */
+export interface NutritionAdjustment {
+  date: string; // yyyy-mm-dd the change takes effect
+  kcal: number; // signed: -150 removes, +150 adds
+  reason: string;
 }
 
 // ---------- mobility benchmarks (weeks 1, 6, 12) ----------
@@ -198,11 +215,14 @@ export interface ProgressionEvent {
 }
 
 export interface Settings {
-  blockStartDate: string; // ISO Monday of week 1
-  startWeightKg: number; // 80 — SPEC-V5.0.md: starting bodyweight ~80 kg
-  targetWeightKg: number; // 73 — 12-week target ~73 kg
-  proteinTargetLow: number; // 170
-  proteinTargetHigh: number; // 190
+  blockStartDate: string; // ISO day 1 of week 1 (v6.0 started on a Sunday)
+  startWeightKg: number; // v6.0: seeded from the last 7-day average of the previous block
+  targetWeightKg: number; // 73 — the bottom row of the v6.0 nutrition table
+  // v6.0: superseded by the nutrition table (src/data/nutrition.ts), which sets
+  // protein, fat and carbs per weight row. Kept so older exports still parse;
+  // nothing reads them any more.
+  proteinTargetLow: number;
+  proteinTargetHigh: number;
   // Unlike protein, SPEC.md gives no numeric carb/fat targets — the user sets
   // these themselves, so they stay unset (no band shown) until they do.
   carbTargetLow?: number;
@@ -214,6 +234,9 @@ export interface Settings {
   // stored/exported weight values are always kg regardless of this setting.
   weightUnit: 'kg' | 'lbs';
   reminderTime?: string;
+  // v6.0: calorie target changes applied from the weekly nutrition check. The
+  // table row itself is never edited — see NutritionAdjustment.
+  nutritionAdjustments?: NutritionAdjustment[];
   // ISO timestamp of the last "Reset block". The merge tombstone cutoff: a
   // REMOTE record older than this was deleted by the reset and must not be
   // resurrected by the union-based merge. SPEC-V3.0.md section 6.

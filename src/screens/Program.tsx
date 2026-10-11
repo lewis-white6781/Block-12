@@ -3,8 +3,10 @@
 // rules, phase descriptions and the progressive-overload definition. This is
 // the reference the plan used to live in a document; it now lives in the app.
 import { useMemo, useState } from 'react';
-import { program, sessionTitles } from '../data/program';
-import { exercisesFor, phaseForWeek, resolvePrescription } from '../domain/phase';
+import { format } from 'date-fns';
+import { dailyChecksFor, phaseTable, planRules, program, sessionTitles } from '../data/program';
+import { useStore } from '../store/useStore';
+import { dateForBlockDay, exercisesFor, phaseForWeek, resolvePrescription } from '../domain/phase';
 import { PHASE_NOTES } from '../domain/review';
 import type { Block, DayId, Exercise } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
@@ -26,13 +28,14 @@ const DAY_LABEL: Record<DayId, string> = {
 
 const BLOCK_ORDER: Block[] = ['am', 'main', 'later'];
 
-// SPEC-V5.0.md section 2 — two RPE tables. Resistance and calisthenics skill
-// work share one scale; flexibility has its own, and never needs 8+.
+// Two RPE scales the Cut to New Year block uses: strength for everything
+// loaded, stretch for Mobility + Core's stretches ("Stretch intensity RPE
+// 6–7.5"). Definitions only — the prescriptions live in program.ts.
 const RPE_TABLES: { id: string; label: string; note: string; rows: { rpe: string; meaning: string }[] }[] = [
   {
     id: 'resistance',
     label: 'Resistance training',
-    note: 'For calisthenics skill work, technical failure means the position or movement standard breaks: front lever hips drop, HSPU ROM shortens or the line collapses, a ring dip loses stable depth or lockout. Do not turn prescribed RPE 8 work into RPE 10 work because you feel good.',
+    note: 'For skill work, technical failure means the movement standard breaks: front lever hips drop, HSPU ROM shortens or the line collapses, a ring dip loses depth or lockout.',
     rows: [
       { rpe: '6', meaning: '4+ reps in reserve' },
       { rpe: '7', meaning: '3 reps in reserve' },
@@ -40,58 +43,20 @@ const RPE_TABLES: { id: string; label: string; note: string; rows: { rpe: string
       { rpe: '8', meaning: '~2 reps in reserve' },
       { rpe: '8.5', meaning: '~1–2 reps in reserve' },
       { rpe: '9', meaning: '~1 rep in reserve' },
+      { rpe: '9.5', meaning: 'maybe 1 rep in reserve' },
       { rpe: '10', meaning: '0 / technical failure' },
     ],
   },
   {
     id: 'flexibility',
-    label: 'Flexibility',
-    note: 'Progress flexibility through more usable ROM → better control → modest external load, not by tolerating more pain.',
+    label: 'Stretching',
+    note: 'Mobility + Core stretches sit at RPE 6–7.5.',
     rows: [
-      { rpe: '5', meaning: 'easy' },
       { rpe: '6', meaning: 'clear stretch, fully controlled' },
       { rpe: '7', meaning: 'strong but comfortable' },
       { rpe: '7.5', meaning: 'strong end-range work, still relaxed' },
-      { rpe: '8+', meaning: 'not required' },
     ],
   },
-];
-
-// SPEC-V5.0.md section 7 — cut-specific autoregulation. Reduce load or volume
-// that day if any of these hold; never compensate for poor recovery by training
-// to failure, adding unscheduled sets, racing the Sunday cardio, or testing
-// HSPU / front lever every week.
-const AUTOREGULATION_RULES: string[] = [
-  'The first work set is ~1 RPE above prescription.',
-  'Performance falls more than 10–15% across sets.',
-  'Multiple nights of poor sleep have accumulated.',
-  'Joints or tendons are becoming progressively irritated.',
-  'Bodyweight is dropping much faster than intended and strength is falling.',
-];
-
-// SPEC-V5.0.md section 7's joint/tendon rule — remove the movement, do not
-// "RPE through" it.
-const TENDON_RULES: string[] = [
-  'sharp pain',
-  'tendon pain that increases through the warm-up',
-  'sudden loss of strength',
-  'persistent elbow, shoulder or Achilles irritation',
-  'pain that changes how you move',
-];
-
-// SPEC-V5.0.md section 8 — what counts as progress during a cut.
-const PROGRESSIVE_OVERLOAD_AXES: string[] = [
-  'same weighted dip at lower bodyweight',
-  'same weighted pull-up at lower bodyweight',
-  'harder HSPU leverage',
-  'greater HSPU ROM',
-  'less wall assistance',
-  'harder front-lever progression',
-  'less band assistance',
-  'better lever body line',
-  'stronger dragon flag / rollout / wiper',
-  'deeper pancake / splits / pike',
-  'greater cardio output at the same RPE',
 ];
 
 function ExerciseEntry({ exercise, week }: { exercise: Exercise; week: number }) {
@@ -100,7 +65,7 @@ function ExerciseEntry({ exercise, week }: { exercise: Exercise; week: number })
     <div className="py-2">
       <div className="flex items-baseline justify-between gap-3 text-sm">
         <span className="text-text">
-          {exercise.order} {exercise.name}
+          {exercise.order || '—'} {exercise.name}
         </span>
         <span className="shrink-0 tabular-nums text-muted">{formatPrescription(prescription)}</span>
       </div>
@@ -122,10 +87,18 @@ export default function Program() {
   const [week, setWeek] = useState(1);
   const [dayId, setDayId] = useState<DayId>('mon');
   const phase = phaseForWeek(week);
+  const blockStartDate = useStore((s) => s.settings.blockStartDate);
 
-  // All three slots, each hidden when the day has nothing in it — Thursday runs
-  // and does nothing else, and the Wednesday recovery run is absent in weeks
-  // 1, 2 and 4.
+  /** "11 Oct – 24 Oct" for a run of weeks, from the block's actual start date. */
+  function weeksDateRange(weeks: number[]): string {
+    const first = dateForBlockDay(blockStartDate, (weeks[0] - 1) * 7);
+    const last = dateForBlockDay(blockStartDate, weeks[weeks.length - 1] * 7 - 1);
+    return `${format(first, 'd MMM')} – ${format(last, 'd MMM')}`;
+  }
+
+  // Every slot, each hidden when the day has nothing in it — Tuesday, Wednesday
+  // and Friday carry no gym session, and the Christmas weeks drop everything
+  // outside the floor.
   const blocks = useMemo(
     () =>
       BLOCK_ORDER.map((block) => ({
@@ -167,9 +140,21 @@ export default function Program() {
           ))}
         </div>
 
+        <Card className="mt-4">
+          <SectionHeader>Daily</SectionHeader>
+          <ul className="mt-1 space-y-0.5 text-sm text-text">
+            {dailyChecksFor(dayId).map((check) => (
+              <li key={check.id}>
+                ☐ {check.label}
+                {check.detail && <span className="text-xs text-muted"> — {check.detail}</span>}
+              </li>
+            ))}
+          </ul>
+        </Card>
+
         {blocks.length === 0 ? (
           <Card className="mt-4">
-            <p className="text-sm text-muted">Nothing prescribed this day in week {week}.</p>
+            <p className="text-sm text-muted">No gym session this day.</p>
           </Card>
         ) : (
           blocks.map(({ block, title, exercises }) => (
@@ -215,39 +200,38 @@ export default function Program() {
           </Card>
         ))}
 
-        <Card className="mt-4">
-          <SectionHeader>Autoregulation</SectionHeader>
-          <p className="mt-1 text-xs text-muted">
-            The plan provides the target. Your readiness determines the exact load.
-          </p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-text">
-            {AUTOREGULATION_RULES.map((rule, i) => (
-              <li key={i}>{rule}</li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card className="mt-4">
-          <SectionHeader>Joint & tendon rule</SectionHeader>
-          <p className="mt-1 text-xs text-muted">
-            Immediately reduce or remove the high-strain movement if you get:
-          </p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-text">
-            {TENDON_RULES.map((rule, i) => (
-              <li key={i}>{rule}</li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-bad">Do not attempt to "RPE through" tendon pain.</p>
-        </Card>
-
-        <Card className="mt-4">
-          <SectionHeader>Progress during the cut</SectionHeader>
-          <p className="mt-1 text-xs text-muted">
-            The block does not require muscle gain to succeed. Progressive overload may appear as:
-          </p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-text">
-            {PROGRESSIVE_OVERLOAD_AXES.map((axis, i) => (
-              <li key={i}>{axis}</li>
+        <Card className="mt-4 overflow-x-auto">
+          <SectionHeader>Sets by phase</SectionHeader>
+          <table className="mt-2 w-full text-left text-xs">
+            <thead>
+              <tr className="text-muted">
+                <th className="py-1 pr-2">Phase</th>
+                <th className="py-1 pr-2">Weeks</th>
+                <th className="py-1 pr-2">Dates</th>
+                <th className="py-1 pr-2">★ sets</th>
+                <th className="py-1">RPE</th>
+              </tr>
+            </thead>
+            <tbody className="text-text">
+              {phaseTable.map((row) => (
+                <tr
+                  key={row.phase}
+                  className={`border-t border-line ${row.weeks.includes(week) ? 'bg-surface-2' : ''}`}
+                >
+                  <td className="py-1 pr-2">{row.phase}</td>
+                  <td className="py-1 pr-2 tabular-nums">
+                    {row.weeks.length > 1 ? `${row.weeks[0]}–${row.weeks[row.weeks.length - 1]}` : row.weeks[0]}
+                  </td>
+                  <td className="py-1 pr-2 tabular-nums">{weeksDateRange(row.weeks)}</td>
+                  <td className="py-1 pr-2 tabular-nums">{row.starSets}</td>
+                  <td className="py-1 tabular-nums">{row.rpe}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-muted">
+            {planRules.map((rule) => (
+              <li key={rule}>{rule}</li>
             ))}
           </ul>
         </Card>

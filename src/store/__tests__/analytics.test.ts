@@ -139,9 +139,9 @@ describe('analysis pack builders', () => {
   it('emits a planned-session row for every prescribed slot of all 12 weeks', () => {
     const state = baseState({ settings: { ...defaultSettings(), blockStartDate: '2026-09-07' } });
     const rows = buildPlannedSessionsCSV(state, '2026-09-07').split('\n');
-    // Header plus at least one slot per day that prescribes anything — v5.0
-    // has main sessions 5 days/week alone, so well over 60 slots in 12 weeks.
-    expect(rows.length).toBeGreaterThan(60);
+    // Header plus one row per prescribed slot — v6.0 runs four main sessions a
+    // week (Mon, Thu, Sat, Sun) for all 12 weeks, floor sessions included.
+    expect(rows.length).toBe(1 + 4 * 12);
     expect(rows[0]).toBe('date,week,day,block,status');
     // Nothing is logged, so no row may claim completion.
     expect(rows.slice(1).every((r) => r.endsWith('unknown') || r.endsWith('upcoming'))).toBe(true);

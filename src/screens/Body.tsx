@@ -1,7 +1,7 @@
 // SPEC.md section 7.4.
 import { useMemo, useState } from 'react';
 import { format, subDays } from 'date-fns';
-import { Bar, BarChart, CartesianGrid, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useStore } from '../store/useStore';
 import {
   corridorStatus,
@@ -20,6 +20,9 @@ import { fmt, fmtPct } from '../domain/format';
 import { tooltipFormatter } from '../components/chartFormat';
 import { fmtKg, fmtKgSigned } from '../domain/units';
 import DailyEntryFields from '../components/DailyEntryFields';
+import NutritionCheckBanner from '../components/NutritionCheckBanner';
+import { nutritionRules } from '../data/nutrition';
+import { dailyTargets } from '../domain/nutrition';
 import WeightChart from '../components/WeightChart';
 import Stat from '../components/Stat';
 import PhaseBadge from '../components/PhaseBadge';
@@ -36,6 +39,7 @@ export default function Body() {
   const settings = useStore((s) => s.settings);
   const dailyEntries = useStore((s) => s.dailyEntries);
   const sessionLogs = useStore((s) => s.sessionLogs);
+  const undoLastNutritionAdjustment = useStore((s) => s.undoLastNutritionAdjustment);
 
   const today = useToday();
   const todayStr = format(today, 'yyyy-MM-dd');
@@ -60,6 +64,8 @@ export default function Body() {
   const planVariance = planVarianceKg(entriesArray, todayStr, settings);
   const plannedToday = plannedWeightOnDate(settings, todayStr);
   const targetMismatch = corridorTargetMismatch(settings);
+  const targets = dailyTargets(entriesArray, settings, todayStr);
+  const adjustments = settings.nutritionAdjustments ?? [];
 
   const last7Days = useMemo(
     () =>
@@ -151,16 +157,76 @@ export default function Body() {
       </Card>
 
       <Card className="mt-4">
+        <SectionHeader>Nutrition · today's targets</SectionHeader>
+        <p className="mt-0.5 text-xs text-muted">
+          {targets.row.label} row, from{' '}
+          {targets.basis === 'avg7'
+            ? `the 7-day average ${fmtKg(targets.basisKg, unit)} ${unit}`
+            : targets.basis === 'latest'
+              ? `the last weigh-in ${fmtKg(targets.basisKg, unit)} ${unit}`
+              : `the start weight ${fmtKg(targets.basisKg, unit)} ${unit}`}
+          {targets.belowTable && ' — below the table, bottom row held'}
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Stat
+            label="Calories"
+            value={fmt(targets.kcal, 0)}
+            sublabel={
+              targets.adjustmentKcal !== 0
+                ? `table ${fmt(targets.row.kcal, 0)} ${targets.adjustmentKcal > 0 ? '+' : '−'} ${fmt(Math.abs(targets.adjustmentKcal), 0)}`
+                : 'kcal'
+            }
+          />
+          <Stat label="Protein" value={`${fmt(targets.proteinG, 0)} g`} sublabel="hit it first" />
+          <Stat label="Fat" value={`${fmt(targets.fatG, 0)} g`} />
+          <Stat label="Carbs" value={`${fmt(targets.carbsG, 0)} g`} />
+        </div>
+        <div className="mt-3">
+          <NutritionCheckBanner date={todayStr} isToday />
+        </div>
+        {adjustments.length > 0 && (
+          <div className="mt-3 border-t border-line pt-2">
+            <div className="text-xs uppercase tracking-wide text-muted">Adjustments applied</div>
+            <ul className="mt-1 space-y-0.5 text-sm tabular-nums text-text">
+              {adjustments.map((a, i) => (
+                <li key={`${a.date}-${i}`}>
+                  {a.date}: {a.kcal > 0 ? '+' : '−'}
+                  {fmt(Math.abs(a.kcal), 0)} kcal ({a.kcal > 0 ? '+' : '−'}
+                  {fmt(Math.abs(a.kcal) / 4, 0)} g carbs)
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={undoLastNutritionAdjustment}
+              className="mt-2 min-h-11 w-full rounded border border-line text-sm text-text"
+            >
+              Undo last adjustment
+            </button>
+          </div>
+        )}
+        <details className="mt-3 text-xs text-muted">
+          <summary className="min-h-11 py-3">The plan's nutrition rules</summary>
+          <ol className="list-decimal space-y-0.5 pl-5">
+            {nutritionRules.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ol>
+        </details>
+      </Card>
+
+      <Card className="mt-4">
         <SectionHeader>Calories · last 7 days</SectionHeader>
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--line)' }} tickLine={false} />
-            <YAxis hide domain={[0, 'dataMax + 200']} />
+            <YAxis hide domain={[0, (dataMax: number) => Math.max(dataMax, targets.kcal) + 200]} />
             <Tooltip
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
               formatter={tooltipFormatter(0)}
             />
+            <ReferenceLine y={targets.kcal} stroke="var(--muted)" strokeDasharray="4 4" />
             <Bar dataKey="calories" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
@@ -168,15 +234,13 @@ export default function Body() {
 
       <Card className="mt-4">
         <SectionHeader>Protein · last 7 days</SectionHeader>
-        <p className="mt-0.5 text-xs text-muted">
-          Target {settings.proteinTargetLow}–{settings.proteinTargetHigh} g
-        </p>
+        <p className="mt-0.5 text-xs text-muted">Target {fmt(targets.proteinG, 0)} g</p>
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--line)' }} tickLine={false} />
             <YAxis
-              domain={[0, 'dataMax + 40']}
+              domain={[0, (dataMax: number) => Math.max(dataMax, targets.proteinG) + 40]}
               tick={{ fill: 'var(--muted)', fontSize: 10 }}
               axisLine={{ stroke: 'var(--line)' }}
               tickLine={false}
@@ -186,7 +250,7 @@ export default function Body() {
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
               formatter={tooltipFormatter(0)}
             />
-            <ReferenceArea y1={settings.proteinTargetLow} y2={settings.proteinTargetHigh} fill="var(--good)" fillOpacity={0.15} />
+            <ReferenceLine y={targets.proteinG} stroke="var(--muted)" strokeDasharray="4 4" />
             <Bar dataKey="proteinG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
@@ -194,17 +258,13 @@ export default function Body() {
 
       <Card className="mt-4">
         <SectionHeader>Carbs · last 7 days</SectionHeader>
-        {settings.carbTargetLow !== undefined && settings.carbTargetHigh !== undefined && (
-          <p className="mt-0.5 text-xs text-muted">
-            Target {settings.carbTargetLow}–{settings.carbTargetHigh} g
-          </p>
-        )}
+        <p className="mt-0.5 text-xs text-muted">Target {fmt(targets.carbsG, 0)} g</p>
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--line)' }} tickLine={false} />
             <YAxis
-              domain={[0, 'dataMax + 40']}
+              domain={[0, (dataMax: number) => Math.max(dataMax, targets.carbsG) + 40]}
               tick={{ fill: 'var(--muted)', fontSize: 10 }}
               axisLine={{ stroke: 'var(--line)' }}
               tickLine={false}
@@ -214,9 +274,7 @@ export default function Body() {
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
               formatter={tooltipFormatter(0)}
             />
-            {settings.carbTargetLow !== undefined && settings.carbTargetHigh !== undefined && (
-              <ReferenceArea y1={settings.carbTargetLow} y2={settings.carbTargetHigh} fill="var(--good)" fillOpacity={0.15} />
-            )}
+            <ReferenceLine y={targets.carbsG} stroke="var(--muted)" strokeDasharray="4 4" />
             <Bar dataKey="carbsG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
@@ -224,17 +282,13 @@ export default function Body() {
 
       <Card className="mt-4">
         <SectionHeader>Fat · last 7 days</SectionHeader>
-        {settings.fatTargetLow !== undefined && settings.fatTargetHigh !== undefined && (
-          <p className="mt-0.5 text-xs text-muted">
-            Target {settings.fatTargetLow}–{settings.fatTargetHigh} g
-          </p>
-        )}
+        <p className="mt-0.5 text-xs text-muted">Target {fmt(targets.fatG, 0)} g</p>
         <ResponsiveContainer width="100%" height={120}>
           <BarChart data={last7Days} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--line)' }} tickLine={false} />
             <YAxis
-              domain={[0, 'dataMax + 20']}
+              domain={[0, (dataMax: number) => Math.max(dataMax, targets.fatG) + 20]}
               tick={{ fill: 'var(--muted)', fontSize: 10 }}
               axisLine={{ stroke: 'var(--line)' }}
               tickLine={false}
@@ -244,9 +298,7 @@ export default function Body() {
               contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, color: 'var(--text)' }}
               formatter={tooltipFormatter(0)}
             />
-            {settings.fatTargetLow !== undefined && settings.fatTargetHigh !== undefined && (
-              <ReferenceArea y1={settings.fatTargetLow} y2={settings.fatTargetHigh} fill="var(--good)" fillOpacity={0.15} />
-            )}
+            <ReferenceLine y={targets.fatG} stroke="var(--muted)" strokeDasharray="4 4" />
             <Bar dataKey="fatG" fill="var(--good)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>

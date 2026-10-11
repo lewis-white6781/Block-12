@@ -24,11 +24,13 @@ import { detectStagnation } from '../domain/analysis';
 import { dueFollowUps } from '../domain/decisions';
 import { buildPlainHistory } from '../domain/performance';
 import { daysWithLoggedWeight } from '../domain/review';
-import type { Block, Readiness, SessionLog } from '../domain/types';
+import type { Block, DailyEntry, Readiness, SessionLog } from '../domain/types';
 import PhaseBadge from '../components/PhaseBadge';
 import ReadinessCheckIn from '../components/ReadinessCheckIn';
 import ExerciseCard from '../components/ExerciseCard';
 import DailyEntryFields from '../components/DailyEntryFields';
+import DailyChecks from '../components/DailyChecks';
+import NutritionCheckBanner from '../components/NutritionCheckBanner';
 import BenchmarkForm from '../components/BenchmarkForm';
 import Card from '../components/Card';
 import SectionHeader from '../components/SectionHeader';
@@ -47,12 +49,14 @@ function WeekStrip({
   todayIndex,
   blockStartDate,
   sessionLogs,
+  dailyEntries,
   onPick,
 }: {
   selectedIndex: number;
   todayIndex: number;
   blockStartDate: string;
   sessionLogs: Record<string, SessionLog>;
+  dailyEntries: Record<string, DailyEntry>;
   onPick: (index: number) => void;
 }) {
   const weekStart = Math.floor(selectedIndex / 7) * 7;
@@ -64,9 +68,10 @@ function WeekStrip({
         if (index >= BLOCK_DAYS) return <span key={i} className="min-h-11 flex-1" />;
 
         const date = format(dateForBlockDay(blockStartDate, index), 'yyyy-MM-dd');
-        const logged = BLOCK_ORDER.some(
-          (block) => sessionLogs[`${date}:${block}`]?.exercises.some((e) => e.sets.length > 0) ?? false,
-        );
+        const logged =
+          BLOCK_ORDER.some(
+            (block) => sessionLogs[`${date}:${block}`]?.exercises.some((e) => e.sets.length > 0) ?? false,
+          ) || Object.values(dailyEntries[date]?.checks ?? {}).some(Boolean);
         const isSelected = index === selectedIndex;
 
         return (
@@ -272,6 +277,7 @@ export default function Today() {
           todayIndex={todayIndex}
           blockStartDate={settings.blockStartDate}
           sessionLogs={sessionLogs}
+          dailyEntries={dailyEntries}
           onPick={setSelectedIndex}
         />
       </div>
@@ -365,9 +371,18 @@ export default function Today() {
           </section>
         )}
 
+        {/* v6.0: the day's tick boxes — handstand + mobility every day,
+            football on Wednesday and Friday (SPEC-V6.0.md section 2). */}
+        <Card className="mt-4">
+          <SectionHeader>Daily</SectionHeader>
+          <div className="mt-2">
+            <DailyChecks date={dateStr} day={dayId} />
+          </div>
+        </Card>
+
         {blocks.length === 0 ? (
           <Card className="mt-4">
-            <p className="text-sm text-text">Nothing prescribed today</p>
+            <p className="text-sm text-text">No gym session today</p>
             <p className="mt-1 text-xs text-muted">Don't forget to log weight and calories.</p>
           </Card>
         ) : (
@@ -391,7 +406,10 @@ export default function Today() {
                   </SectionHeader>
                   {session?.completedAt && <span className="shrink-0 text-xs text-good">Done ✓</span>}
                 </div>
-                <h3 className="mt-1 text-sm text-text">{title}</h3>
+                <h3 className="mt-1 text-sm text-text">
+                  {title}
+                  {phase === 'christmas' && <span className="ml-2 text-xs text-muted">· floor session</span>}
+                </h3>
 
                 {block === 'later' && mobilityVariable && exercises[0]?.rpeScale === 'stretch' && (
                   <div className="mt-2 rounded bg-surface-2 px-2 py-1.5 text-xs">
@@ -435,8 +453,17 @@ export default function Today() {
         )}
 
         <Card className="mt-4">
-          <DailyEntryFields date={dateStr} showSummary />
+          <SectionHeader>Weight & food</SectionHeader>
+          <div className="mt-2">
+            <DailyEntryFields date={dateStr} showSummary />
+          </div>
         </Card>
+
+        {/* The weekly calorie check, only when it has something to act on —
+            the full status lives on the Body screen. */}
+        <div className="mt-3">
+          <NutritionCheckBanner date={dateStr} isToday={isViewingToday} actionableOnly />
+        </div>
 
         {isSunday && (
           <button

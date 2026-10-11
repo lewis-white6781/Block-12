@@ -25,21 +25,21 @@ describe('dayIdForDate', () => {
   });
 });
 
-// SPEC-V5.0.md section 3 — one arc with a single deload at week 6.
+// SPEC-V6.0.md section 3 — the "Sets by phase" table.
 describe('phaseForWeek', () => {
   const expected: Record<number, Phase> = {
-    1: 'reentry',
-    2: 'reentry',
-    3: 'accumulation',
-    4: 'accumulation',
-    5: 'accumulation',
-    6: 'deload',
-    7: 'intensification',
-    8: 'intensification',
-    9: 'intensification',
-    10: 'intensification',
-    11: 'realization',
-    12: 'consolidation',
+    1: 'build1',
+    2: 'build1',
+    3: 'build2',
+    4: 'build2',
+    5: 'deload',
+    6: 'build3',
+    7: 'build3',
+    8: 'build3',
+    9: 'peak',
+    10: 'peak',
+    11: 'christmas',
+    12: 'christmas',
   };
 
   it('resolves all 12 weeks to the phase in the week→phase map', () => {
@@ -48,31 +48,29 @@ describe('phaseForWeek', () => {
     }
   });
 
-  it('deloads exactly once, at week 6', () => {
+  it('deloads exactly once, at week 5', () => {
     const deloads = Array.from({ length: 12 }, (_, i) => i + 1).filter((w) => phaseForWeek(w) === 'deload');
-    expect(deloads).toEqual([6]);
+    expect(deloads).toEqual([5]);
   });
 
   it('clamps rather than returning undefined outside 1..12', () => {
-    expect(phaseForWeek(0)).toBe('reentry');
-    expect(phaseForWeek(99)).toBe('consolidation');
+    expect(phaseForWeek(0)).toBe('build1');
+    expect(phaseForWeek(99)).toBe('christmas');
   });
 });
 
 describe('weekRpeCap', () => {
-  // Read off SPEC-V5.0.md's own weekly tables — the highest STRENGTH-scale RPE
-  // the plan prescribes that week, not an invented ceiling. Week 5 and weeks
-  // 10–11 reach 9 on the accessories; the week-6 deload tops out at 7.
-  it('matches the plan\'s maximum prescribed RPE per week', () => {
-    const expected = [8, 8, 8.5, 8.5, 9, 7, 8, 8.5, 8.5, 9, 9, 8];
+  // The top of each phase's RPE range. Christmas prescribes "—", so no cap.
+  it("matches the plan's maximum prescribed RPE per week", () => {
+    const expected = [8.5, 8.5, 8.5, 8.5, 7, 9, 9, 9, 10, 10, null, null];
     for (let week = 1; week <= 12; week++) {
       expect(weekRpeCap(week)).toBe(expected[week - 1]);
     }
   });
 
-  it('drops to 7 in the week-6 deload and nowhere else', () => {
-    expect(weekRpeCap(6)).toBe(7);
-    for (const week of [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12]) expect(weekRpeCap(week)).toBeGreaterThan(7);
+  it('drops to 7 in the week-5 deload and nowhere else', () => {
+    expect(weekRpeCap(5)).toBe(7);
+    for (const week of [1, 2, 3, 4, 6, 7, 8, 9, 10]) expect(weekRpeCap(week)).toBeGreaterThan(7);
   });
 });
 

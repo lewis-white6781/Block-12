@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayTitles, program, sessionTitles } from '../program';
+import { dailyChecksFor, dayTitles, program, sessionTitles } from '../program';
 import { SKILLS, relevantJoint } from '../../domain/analysis';
 import { ladders } from '../../domain/../data/ladders';
 import { exercisesFor, resolvePrescription } from '../../domain/phase';
@@ -21,34 +21,48 @@ function byId(id: string) {
 }
 
 /** [sets, rpeLow, rpeHigh] for every week, so a whole table can be asserted at once. */
-function table(id: string): [number, number, number][] {
+function table(id: string): [number, number | undefined, number | undefined][] {
   return WEEKS.map((week) => {
     const p = resolvePrescription(byId(id), week)!;
-    return [p.sets, p.rpeLow!, p.rpeHigh!];
+    return [p.sets, p.rpeLow, p.rpeHigh];
   });
 }
 
-// SPEC-V5.0.md section 2 — the weekly structure:
-// Push / Pull / Legs / Rest / Push / Pull / Rest.
+// The "Sets by phase" table, as the ★ exercises read it. Weeks 11–12 are the
+// Christmas floor: 3 sets, no RPE — for ★ exercises that are in the floor.
+const STAR_TABLE: [number, number | undefined, number | undefined][] = [
+  [3, 8, 8.5],
+  [3, 8, 8.5],
+  [4, 8.5, 8.5],
+  [4, 8.5, 8.5],
+  [2, 6, 7],
+  [4, 8.5, 9],
+  [4, 8.5, 9],
+  [4, 8.5, 9],
+  [5, 9.5, 10],
+  [5, 9.5, 10],
+  [3, undefined, undefined],
+  [3, undefined, undefined],
+];
+
+// "All other exercises: 3 sets (2 in Week 5)", at the phase RPE.
+const OTHER_TABLE_FLOOR: typeof STAR_TABLE = STAR_TABLE.map(([, lo, hi], i) => [i === 4 ? 2 : 3, lo, hi]);
+
+// SPEC-V6.0.md section 2 — Upper A / Rest / Football / Upper B / Football /
+// Mobility + Core / Lower.
 describe('the weekly structure', () => {
-  it('runs grease-the-groove on Monday, Wednesday and Friday only', () => {
-    expect(DAYS.filter((day) => idsFor(day, 'am', 1).length > 0)).toEqual(['mon', 'wed', 'fri']);
+  it('has a gym session on Monday, Thursday, Saturday and Sunday only', () => {
+    for (const week of WEEKS) {
+      const withMain = DAYS.filter((day) => idsFor(day, 'main', week).length > 0);
+      expect(withMain, `week ${week}`).toEqual(['mon', 'thu', 'sat', 'sun']);
+    }
   });
 
-  it('has a main session every day except Thursday, which is the rest day', () => {
-    expect(DAYS.filter((day) => idsFor(day, 'main', 1).length > 0)).toEqual(['mon', 'tue', 'wed', 'fri', 'sat', 'sun']);
-  });
-
-  it('runs later sessions on Monday, Thursday, Friday and Sunday', () => {
-    expect(DAYS.filter((day) => idsFor(day, 'later', 1).length > 0)).toEqual(['mon', 'thu', 'fri', 'sun']);
-  });
-
-  it('prescribes the same slots in every week — nothing opts out', () => {
+  it('uses no AM or later slots', () => {
     for (const week of WEEKS) {
       for (const day of DAYS) {
-        for (const block of BLOCKS) {
-          expect(idsFor(day, block, week), `${day}/${block} week ${week}`).toEqual(idsFor(day, block, 1));
-        }
+        expect(idsFor(day, 'am', week)).toEqual([]);
+        expect(idsFor(day, 'later', week)).toEqual([]);
       }
     }
   });
@@ -56,211 +70,152 @@ describe('the weekly structure', () => {
   it('names every slot it prescribes, and nothing it does not', () => {
     for (const day of DAYS) {
       for (const block of BLOCKS) {
-        const prescribed = exercisesFor(program, day, block, 1).length > 0;
-        expect(!!sessionTitles[day][block], `${day}/${block}`).toBe(prescribed);
+        const prescribed = WEEKS.some((week) => idsFor(day, block, week).length > 0);
+        expect(sessionTitles[day][block] !== undefined, `${day}/${block}`).toBe(prescribed);
       }
+      expect(dayTitles[day]).toBeTruthy();
     }
-    expect(Object.keys(dayTitles).sort()).toEqual([...DAYS].sort());
+  });
+
+  it('ticks handstand + mobility every day and football on Wednesday and Friday', () => {
+    for (const day of DAYS) {
+      expect(dailyChecksFor(day).map((c) => c.id)).toEqual(
+        day === 'wed' || day === 'fri' ? ['handstand-mobility', 'football'] : ['handstand-mobility'],
+      );
+    }
   });
 });
 
-// The plan's per-day tables, transcribed exactly. One representative table per
-// pattern is pinned in full; the shared tables are pinned by identity.
-describe('Monday — Push A', () => {
-  it('runs the five prescribed slots in order', () => {
+describe('Monday — Upper A', () => {
+  it('runs the six rows in order, the superset sharing row 5', () => {
     expect(idsFor('mon', 'main', 1)).toEqual([
       'hspu-primary',
       'ring-dip',
+      'ring-pullup',
+      'fl-hold-banded',
       'lateral-raise',
       'overhead-triceps-ext',
       'dragon-flag',
     ]);
+    expect(byId('lateral-raise').supersetId).toBe(byId('overhead-triceps-ext').supersetId);
+    expect(byId('lateral-raise').order).toBe(5);
   });
 
-  it('prescribes the primary HSPU exactly as the plan\'s table', () => {
-    expect(table('hspu-primary')).toEqual([
-      [4, 8, 8],
-      [4, 8, 8],
-      [4, 8.5, 8.5],
-      [5, 8.5, 8.5],
-      [5, 8.5, 8.5],
-      [3, 6, 7],
-      [4, 8, 8],
-      [4, 8.5, 8.5],
-      [5, 8.5, 8.5],
-      [5, 8.5, 8.5],
-      [4, 8.5, 9],
-      [3, 7, 8],
-    ]);
-    for (const week of WEEKS) {
-      const p = resolvePrescription(byId('hspu-primary'), week)!;
-      expect([p.repsLow, p.repsHigh], `week ${week} reps`).toEqual([4, 6]);
-    }
-    // "2–3 sets" in the deload and consolidation weeks is recorded, not rounded away.
-    expect(resolvePrescription(byId('hspu-primary'), 6)!.note).toBe('2–3 sets');
-    expect(resolvePrescription(byId('hspu-primary'), 12)!.note).toBe('2–3 sets');
+  it('runs the three ★ lifts on the ★ table', () => {
+    for (const id of ['hspu-primary', 'ring-dip', 'ring-pullup']) expect(table(id), id).toEqual(STAR_TABLE);
   });
 
-  it('prescribes the weighted ring dip identically on Monday and Friday', () => {
-    expect(table('ring-dip-secondary')).toEqual(table('ring-dip'));
-    expect(table('ring-dip')[5]).toEqual([2, 6, 7]); // week 6 deload
+  it('notes the 4–5 set range in the peak weeks', () => {
+    expect(resolvePrescription(byId('ring-dip'), 9)?.note).toBe('4–5 sets');
   });
 
-  it('runs the moderate cardio as one continuous block, building to 30 minutes', () => {
-    const minutes = WEEKS.map((week) => resolvePrescription(byId('mon-moderate-cardio'), week)!.minutesEach);
-    expect(minutes).toEqual([20, 22, 24, 26, 28, 18, 24, 26, 28, 30, 30, 25]);
-    expect(byId('mon-moderate-cardio').rpeScale).toBe('run');
-    expect(resolvePrescription(byId('mon-moderate-cardio'), 6)!.note).toBe('15–18 min');
+  it('holds the banded front lever at its stated RPE 7, 8–10 s', () => {
+    const p = resolvePrescription(byId('fl-hold-banded'), 3)!;
+    expect([p.secLow, p.secHigh, p.rpeLow, p.rpeHigh]).toEqual([8, 10, 7, 7]);
+  });
+
+  it('runs the floor (rows 1–3) at Christmas and nothing else', () => {
+    expect(idsFor('mon', 'main', 11)).toEqual(['hspu-primary', 'ring-dip', 'ring-pullup']);
+    expect(idsFor('mon', 'main', 12)).toEqual(['hspu-primary', 'ring-dip', 'ring-pullup']);
   });
 });
 
-describe('Tuesday — Pull A', () => {
-  it('leads with the hard front-lever isometric, held 5–8 s', () => {
-    expect(idsFor('tue', 'main', 1)).toEqual([
+describe('Thursday — Upper B', () => {
+  it('runs the six rows in order', () => {
+    expect(idsFor('thu', 'main', 1)).toEqual([
       'fl-hold-primary',
       'fl-raise',
-      'rear-delt-fly',
-      'wall-curl',
+      'hspu-secondary',
+      'fl-row-banded',
+      'ring-curl-b',
+      'ring-reverse-fly',
       'standing-ab-wheel',
     ]);
-    const p = resolvePrescription(byId('fl-hold-primary'), 1)!;
-    expect([p.secLow, p.secHigh]).toEqual([5, 8]);
   });
 
-  it('shares the accessory table across every upper-body accessory in the block', () => {
-    const reference = table('lateral-raise');
-    for (const id of ['overhead-triceps-ext', 'rear-delt-fly', 'wall-curl', 'lateral-raise-c', 'cable-triceps-ext', 'hammer-curl']) {
-      expect(table(id), id).toEqual(reference);
-    }
-    expect(reference[4]).toEqual([4, 9, 9]); // week 5 is the first RPE 9
-    expect(reference[5]).toEqual([2, 6, 7]); // deload
+  it('stars the lever hold, the raise and the row, not the wall HSPU', () => {
+    for (const id of ['fl-hold-primary', 'fl-raise']) expect(table(id), id).toEqual(STAR_TABLE);
+    expect(table('fl-row-banded').slice(0, 10)).toEqual(STAR_TABLE.slice(0, 10));
+    expect(table('hspu-secondary')).toEqual(OTHER_TABLE_FLOOR);
+  });
+
+  it('floors rows 1–3, which drops the ★ row at row 4', () => {
+    expect(idsFor('thu', 'main', 11)).toEqual(['fl-hold-primary', 'fl-raise', 'hspu-secondary']);
   });
 });
 
-describe('Wednesday — Legs', () => {
-  it('runs three serious exercises then two lower-leg movements', () => {
-    expect(idsFor('wed', 'main', 1)).toEqual([
-      'hack-squat',
+describe('Saturday — Mobility + Core', () => {
+  it('runs all twelve rows', () => {
+    expect(exercisesFor(program, 'sat', 'main', 1).map((e) => e.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  });
+
+  it('holds every stretch at RPE 6–7.5 on the stretch scale', () => {
+    for (const id of [
+      'flexa-cossack',
+      'flexa-pancake-good-morning',
+      'flexb-hip-flexor-split',
+      'flexa-middle-split',
+      'flexb-front-split',
+      'flexa-bench-shoulder',
+      'flexb-bridge',
+    ]) {
+      expect(byId(id).rpeScale, id).toBe('stretch');
+      const p = resolvePrescription(byId(id), 3)!;
+      expect([p.rpeLow, p.rpeHigh], id).toEqual([6, 7.5]);
+    }
+  });
+
+  it('uses the table\'s own set counts, and 2 sets in week 5', () => {
+    expect(resolvePrescription(byId('flexb-front-split'), 1)?.sets).toBe(2);
+    expect(resolvePrescription(byId('pike-compression-lsit'), 1)?.sets).toBe(4);
+    expect(resolvePrescription(byId('pike-compression-lsit'), 5)?.sets).toBe(2);
+    expect(resolvePrescription(byId('cable-crunch'), 1)?.sets).toBe(3);
+  });
+
+  it('floors rows 1–4', () => {
+    expect(idsFor('sat', 'main', 11)).toEqual([
+      'flexa-cossack',
+      'flexa-pancake-good-morning',
+      'hanging-leg-raise-slow',
+      'copenhagen-plank',
+    ]);
+  });
+});
+
+describe('Sunday — Lower', () => {
+  it('opens with the 8-minute warm-up, then the five rows', () => {
+    expect(idsFor('sun', 'main', 1)).toEqual([
+      'sun-warmup',
+      'broad-jump',
+      'lateral-bound',
+      'trap-bar-deadlift',
       'bulgarian-split-squat',
       'nordic-curl',
       'calf-raise-b',
       'tibialis-raise',
     ]);
+    expect(resolvePrescription(byId('sun-warmup'), 1)?.minutesEach).toBe(8);
   });
 
-  it('shares the lower-body table across the four accessories and the wiper', () => {
-    const reference = table('bulgarian-split-squat');
-    for (const id of ['nordic-curl', 'calf-raise-b', 'tibialis-raise', 'windshield-wiper']) {
-      expect(table(id), id).toEqual(reference);
-    }
-    expect(reference[5]).toEqual([2, 6, 6]);
-    expect(reference[11]).toEqual([2, 7, 7]);
+  it('runs the jumps at 3–4 sets', () => {
+    const p = resolvePrescription(byId('broad-jump'), 1)!;
+    expect(p.sets).toBe(4);
+    expect(p.note).toBe('3–4 sets');
   });
-});
 
-describe('Friday — Push B and HIIT', () => {
-  it('runs the dip first, the wall-assisted HSPU second, and a core superset last', () => {
-    expect(idsFor('fri', 'main', 1)).toEqual([
-      'ring-dip-secondary',
-      'hspu-secondary',
-      'lateral-raise-c',
-      'cable-triceps-ext',
-      'cable-crunch',
-      'weighted-side-plank',
+  it('stars the deadlift and the split squat', () => {
+    expect(table('trap-bar-deadlift')).toEqual(STAR_TABLE);
+    expect(table('bulgarian-split-squat').slice(0, 10)).toEqual(STAR_TABLE.slice(0, 10));
+  });
+
+  it('floors the warm-up, 1, 2 and 4', () => {
+    expect(idsFor('sun', 'main', 12)).toEqual([
+      'sun-warmup',
+      'broad-jump',
+      'lateral-bound',
+      'trap-bar-deadlift',
+      'nordic-curl',
     ]);
-    expect(byId('cable-crunch').supersetId).toBe('fri-5');
-    expect(byId('weighted-side-plank').supersetId).toBe('fri-5');
-  });
-
-  it('builds HIIT to eight 30-second intervals, on the run scale with 90 s rest', () => {
-    const intervals = byId('fri-hiit-intervals');
-    expect(intervals.rpeScale).toBe('run');
-    expect(intervals.restSeconds).toBe(90);
-    expect(WEEKS.map((week) => resolvePrescription(intervals, week)!.sets)).toEqual([5, 6, 6, 7, 8, 4, 6, 7, 8, 8, 8, 5]);
-    expect(resolvePrescription(intervals, 10)!.rpeLow).toBe(9.5);
-    expect(idsFor('fri', 'later', 1)).toEqual(['fri-hiit-warmup', 'fri-hiit-intervals', 'fri-hiit-cooldown']);
-  });
-});
-
-describe('Saturday — Pull B', () => {
-  it('keeps the banded lever hold deliberately easier than Tuesday\'s', () => {
-    expect(idsFor('sat', 'main', 1)).toEqual([
-      'fl-hold-banded',
-      'ring-pullup',
-      'fl-row-banded',
-      'hammer-curl',
-      'windshield-wiper',
-    ]);
-    for (const week of WEEKS) {
-      const banded = resolvePrescription(byId('fl-hold-banded'), week)!;
-      const hard = resolvePrescription(byId('fl-hold-primary'), week)!;
-      expect(banded.rpeHigh, `week ${week}`).toBeLessThanOrEqual(hard.rpeHigh!);
-    }
-  });
-
-  it('prescribes the weighted pull-up at 3–5 reps to the plan\'s table', () => {
-    const p = resolvePrescription(byId('ring-pullup'), 1)!;
-    expect([p.repsLow, p.repsHigh]).toEqual([3, 5]);
-    expect(table('ring-pullup')[10]).toEqual([4, 8.5, 9]);
-  });
-});
-
-describe('Sunday — long cardio and Flexibility B', () => {
-  it('builds the long session to 80–90 minutes in week 11', () => {
-    const minutes = WEEKS.map((week) => resolvePrescription(byId('sun-long-cardio'), week)!.minutesEach);
-    expect(minutes).toEqual([45, 50, 55, 60, 65, 45, 60, 65, 70, 75, 90, 60]);
-    expect(resolvePrescription(byId('sun-long-cardio'), 11)!.note).toBe('80–90 min');
-    expect(byId('sun-long-cardio').rpeScale).toBe('run');
-  });
-});
-
-describe('the flexibility sessions', () => {
-  it('runs six items each, on the stretch RPE scale', () => {
-    for (const [day, block] of [['thu', 'later'], ['sun', 'later']] as [DayId, Block][]) {
-      const items = exercisesFor(program, day, block, 1);
-      expect(items, `${day}/${block}`).toHaveLength(6);
-      for (const item of items) expect(item.rpeScale, item.id).toBe('stretch');
-    }
-  });
-
-  it('never prescribes flexibility above RPE 7.5', () => {
-    for (const exercise of program.filter((e) => e.rpeScale === 'stretch')) {
-      for (const week of WEEKS) {
-        expect(resolvePrescription(exercise, week)!.rpeHigh, `${exercise.id} week ${week}`).toBeLessThanOrEqual(7.5);
-      }
-    }
-  });
-
-  it('gives Flexibility A separate set counts for loaded movements and static holds', () => {
-    // Week 3: loaded 3, static 2. Week 5: both 3.
-    expect(resolvePrescription(byId('flexa-cossack'), 3)!.sets).toBe(3);
-    expect(resolvePrescription(byId('flexa-middle-split'), 3)!.sets).toBe(2);
-    expect(resolvePrescription(byId('flexa-cossack'), 5)!.sets).toBe(3);
-    expect(resolvePrescription(byId('flexa-middle-split'), 5)!.sets).toBe(3);
-  });
-
-  it('records the range on holds the plan prescribes as a range', () => {
-    const p = resolvePrescription(byId('flexb-half-split'), 1)!;
-    expect([p.secLow, p.secHigh, p.perSide]).toEqual([45, 60, true]);
-  });
-});
-
-describe('the grease-the-groove blocks', () => {
-  it('shares one rounds table across every GTG item', () => {
-    const expected = [2, 2, 2, 3, 3, 1, 2, 2, 3, 3, 2, 2];
-    for (const exercise of program.filter((e) => e.block === 'am')) {
-      expect(exercise.setsLabel, exercise.id).toBe('rounds');
-      expect(WEEKS.map((week) => resolvePrescription(exercise, week)!.sets), exercise.id).toEqual(expected);
-      expect(resolvePrescription(exercise, 12)!.note, exercise.id).toBe('1–2 rounds');
-    }
-  });
-
-  it('never prescribes GTG above RPE 5 — it is skill practice, not training', () => {
-    for (const exercise of program.filter((e) => e.block === 'am')) {
-      for (const week of WEEKS) {
-        expect(resolvePrescription(exercise, week)!.rpeHigh, `${exercise.id} week ${week}`).toBeLessThanOrEqual(5);
-      }
-    }
   });
 });
 
@@ -275,14 +230,26 @@ describe('program integrity', () => {
     expect(failures).toEqual([]);
   });
 
-  it('gives every exercise a unique id and a unique slot within its session', () => {
+  it('authors every Christmas week explicitly, so nothing falls back to week 10', () => {
+    for (const exercise of program) {
+      for (const week of [11, 12]) {
+        expect(exercise.prescriptions.some((p) => p.weeks.includes(week)), `${exercise.id} wk ${week}`).toBe(true);
+      }
+    }
+  });
+
+  it('gives every exercise a unique id, and shares a row number only within a superset', () => {
     const ids = program.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
 
     for (const day of DAYS) {
       for (const block of BLOCKS) {
-        const orders = program.filter((e) => e.day === day && e.block === block).map((e) => e.order);
-        expect(new Set(orders).size, `${day}/${block}`).toBe(orders.length);
+        const slots = program
+          .filter((e) => e.day === day && e.block === block)
+          .map((e) => `${e.order}:${e.supersetId ?? e.id}`);
+        expect(new Set(slots).size, `${day}/${block}`).toBe(
+          new Set(program.filter((e) => e.day === day && e.block === block).map((e) => e.order)).size,
+        );
       }
     }
   });
@@ -298,8 +265,7 @@ describe('program integrity', () => {
     for (const skill of SKILLS) {
       const exercise = program.find((e) => e.id === skill.exerciseId);
       expect(exercise, `${skill.id} -> ${skill.exerciseId}`).toBeDefined();
-      // A skill pointing at a retired id could never gain another data point.
-      expect(resolvePrescription(exercise!, 12)).not.toBeNull();
+      expect(resolvePrescription(exercise!, 1)?.sets).toBeGreaterThan(0);
     }
   });
 });
@@ -322,25 +288,22 @@ describe('joint warning days', () => {
     ];
   }
 
-  it('warns about shoulders on the two push days and the rear-delt pull day', () => {
+  it('warns about shoulders on the two upper days', () => {
     expect(jointVolumeWarning('shoulder', 'mon', sore('shoulderIrritation'))).not.toBeNull();
-    expect(jointVolumeWarning('shoulder', 'tue', sore('shoulderIrritation'))).not.toBeNull();
-    expect(jointVolumeWarning('shoulder', 'fri', sore('shoulderIrritation'))).not.toBeNull();
-    expect(jointVolumeWarning('shoulder', 'wed', sore('shoulderIrritation'))).toBeNull();
-    expect(jointVolumeWarning('shoulder', 'thu', sore('shoulderIrritation'))).toBeNull();
+    expect(jointVolumeWarning('shoulder', 'thu', sore('shoulderIrritation'))).not.toBeNull();
+    expect(jointVolumeWarning('shoulder', 'sun', sore('shoulderIrritation'))).toBeNull();
+    expect(jointVolumeWarning('shoulder', 'tue', sore('shoulderIrritation'))).toBeNull();
   });
 
-  it('warns about elbows on the lever and pull days, and the triceps push days', () => {
-    expect(jointVolumeWarning('elbow', 'tue', sore('elbowIrritation'))).not.toBeNull();
-    expect(jointVolumeWarning('elbow', 'sat', sore('elbowIrritation'))).not.toBeNull();
-    expect(jointVolumeWarning('elbow', 'thu', sore('elbowIrritation'))).toBeNull();
+  it('warns about elbows on the two upper days', () => {
+    expect(jointVolumeWarning('elbow', 'mon', sore('elbowIrritation'))).not.toBeNull();
+    expect(jointVolumeWarning('elbow', 'thu', sore('elbowIrritation'))).not.toBeNull();
+    expect(jointVolumeWarning('elbow', 'sun', sore('elbowIrritation'))).toBeNull();
   });
 
-  it('warns about the Achilles on the three cardio days and the calf day', () => {
-    for (const day of ['mon', 'wed', 'fri', 'sun'] as DayId[]) {
-      expect(jointVolumeWarning('achilles', day, sore('achillesIrritation')), day).not.toBeNull();
-    }
-    expect(jointVolumeWarning('achilles', 'tue', sore('achillesIrritation'))).toBeNull();
+  it('warns about the Achilles on the jump-and-calf day', () => {
+    expect(jointVolumeWarning('achilles', 'sun', sore('achillesIrritation'))).not.toBeNull();
+    expect(jointVolumeWarning('achilles', 'mon', sore('achillesIrritation'))).toBeNull();
   });
 
   it('names only exercises from the day it is warning about', () => {

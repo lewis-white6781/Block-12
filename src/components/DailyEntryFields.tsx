@@ -2,11 +2,14 @@
 // Macros (SPEC-V1.1.md section 3): typing protein/carbs/fat auto-fills calories
 // at 4/4/9 kcal/g unless calories has been typed directly, in which case that
 // value wins and a mismatch hint shows if it disagrees with the macro sum.
+// v6.0: each nutrition field shows the day's target from the plan's table
+// (SPEC-V6.0.md section 6). Calories alone is enough to log a day.
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { caloriesFromMacros, corridorStatus, rolling7Weight, weeklyRateKg } from '../domain/body';
 import { convertWeight, fmtKg, fmtKgSigned, parseWeight } from '../domain/units';
-import { roundTo } from '../domain/format';
+import { fmt, roundTo } from '../domain/format';
+import { dailyTargets } from '../domain/nutrition';
 import type { DailyEntry } from '../domain/types';
 import NumberPad from './NumberPad';
 
@@ -32,6 +35,13 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
   const rolling = rolling7Weight(entriesArray, date);
   const rate = weeklyRateKg(entriesArray, date);
   const status = corridorStatus(rate);
+  const targets = dailyTargets(entriesArray, settings, date);
+  const basisText =
+    targets.basis === 'avg7'
+      ? `7-day avg ${fmtKg(targets.basisKg, unit)} ${unit} (${targets.basisCount} weigh-in${targets.basisCount === 1 ? '' : 's'})`
+      : targets.basis === 'latest'
+        ? `last weigh-in ${fmtKg(targets.basisKg, unit)} ${unit}`
+        : `start weight ${fmtKg(targets.basisKg, unit)} ${unit} — weigh in to refine`;
 
   // Numeric (not string) — this feeds NumberPad's initial value, not a label.
   const displayWeightKg = entry?.weightKg !== undefined ? roundTo(convertWeight(entry.weightKg, unit), 1) : undefined;
@@ -71,13 +81,34 @@ export default function DailyEntryFields({ date, showSummary }: DailyEntryFields
           label="Calories"
           unit=""
           value={entry?.calories}
+          target={targets.kcal}
           warn={showMismatchHint}
           onTap={() => setPadField('calories')}
         />
-        <EntryField label="Protein" unit=" g" value={entry?.proteinG} onTap={() => setPadField('protein')} />
-        <EntryField label="Carbs" unit=" g" value={entry?.carbsG} onTap={() => setPadField('carbs')} />
-        <EntryField label="Fat" unit=" g" value={entry?.fatG} onTap={() => setPadField('fat')} />
+        <EntryField
+          label="Protein"
+          unit=" g"
+          value={entry?.proteinG}
+          target={targets.proteinG}
+          onTap={() => setPadField('protein')}
+        />
+        <EntryField
+          label="Carbs"
+          unit=" g"
+          value={entry?.carbsG}
+          target={targets.carbsG}
+          onTap={() => setPadField('carbs')}
+        />
+        <EntryField label="Fat" unit=" g" value={entry?.fatG} target={targets.fatG} onTap={() => setPadField('fat')} />
       </div>
+
+      <p className="mt-2 text-xs text-muted">
+        Targets: {targets.row.label} row, from {basisText}
+        {targets.adjustmentKcal !== 0 &&
+          ` · ${targets.adjustmentKcal > 0 ? '+' : '−'}${fmt(Math.abs(targets.adjustmentKcal), 0)} kcal adjustment`}
+        {targets.belowTable && ' · below the table, bottom row held'}
+        . Protein first.
+      </p>
 
       {showMismatchHint && (
         <p className="mt-2 text-xs text-warn">
@@ -137,12 +168,15 @@ function EntryField({
   label,
   unit,
   value,
+  target,
   warn,
   onTap,
 }: {
   label: string;
   unit: string;
   value: number | undefined;
+  /** The day's target, shown under the value. */
+  target?: number;
   warn?: boolean;
   onTap: () => void;
 }) {
@@ -157,6 +191,12 @@ function EntryField({
         {warn && <span className="ml-1 text-warn">•</span>}
       </div>
       <div className="tabular-nums text-text">{value !== undefined ? `${value}${unit}` : '—'}</div>
+      {target !== undefined && (
+        <div className="text-xs tabular-nums text-muted">
+          of {fmt(target, 0)}
+          {unit}
+        </div>
+      )}
     </button>
   );
 }

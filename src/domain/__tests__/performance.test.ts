@@ -46,7 +46,7 @@ function session(date: string, week: number, sets: SetLog[], exerciseId = 'ex'):
     id: `${date}:main`,
     date,
     week,
-    phase: 'reentry',
+    phase: 'build1',
     day: 'mon',
     block: 'main',
     startedAt: `${date}T09:00:00.000Z`,

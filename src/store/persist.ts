@@ -4,6 +4,8 @@
 import { format, startOfWeek } from 'date-fns';
 import { exerciseName } from '../data/exercises';
 import { startOfToday, todayISO } from '../domain/clock';
+import { rolling7Weight } from '../domain/body';
+import { roundTo } from '../domain/format';
 import { phaseForWeek } from '../domain/phase';
 import { placeholderSetScore } from '../domain/scoring';
 import type {
@@ -17,7 +19,20 @@ import type {
 } from '../domain/types';
 
 export const STORAGE_KEY = 'block12:v1';
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
+
+/**
+ * v6.0 — the Cut to New Year block (SPEC-V6.0.md section 8). Day 1 is Sunday
+ * 11 October 2026, and everything recorded under the previous block is wiped.
+ *
+ * The wipe is a FIXED cutoff rather than "now" because migrate() also runs on
+ * every pulled remote blob: a device still on the v5 build can merge its old
+ * records back into the cloud copy (labelled schema 7), and the next v6 pull
+ * must strip exactly the same records again. A per-device "now" would differ
+ * between devices and tombstone each other's new-block data.
+ */
+export const V6_BLOCK_START = '2026-10-11';
+export const V6_WIPE_CUTOFF = '2026-10-11T19:55:00.000Z';
 
 export interface PersistedState {
   schemaVersion: number;
@@ -230,6 +245,80 @@ function migrateToV7(state: LegacyPersistedState): LegacyPersistedState {
 }
 
 /**
+ * v7 -> v8 (v6.0 block): start the Cut to New Year block fresh.
+ *
+ * Deliberately destructive, at the athlete's request — the one migration that
+ * drops data. What survives:
+ *
+ * - Daily entries dated on or after V6_BLOCK_START: a weigh-in on day 1 is
+ *   day-1 data whichever build recorded it.
+ * - Anything written after V6_WIPE_CUTOFF, which only the v6 build can have
+ *   done (bar a stale device logging on the old build in the gap).
+ *
+ * Settings restart from defaults on the new block start. The weight unit and
+ * target weight are preferences, not block data, and carry over; the start
+ * weight is seeded from the previous block's last 7-day average so the trend
+ * and the nutrition row start from where the athlete actually is. Their
+ * `updatedAt` is the fixed cutoff, so any real settings change after the
+ * migration wins the sync merge.
+ *
+ * Exercise ids are untouched — the v5.0 records moved verbatim into
+ * retiredV5.ts, and an imported v5 export still resolves through them.
+ */
+function migrateToV8(state: LegacyPersistedState): LegacyPersistedState {
+  const oldSettings = state.settings ?? {};
+  const previousBlockEntries = Object.values((state.dailyEntries as Record<string, DailyEntry>) ?? {}).filter(
+    (e) => e.date < V6_BLOCK_START,
+  );
+  const lastWeighIn = previousBlockEntries
+    .filter((e) => e.weightKg !== undefined)
+    .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const seededStart = lastWeighIn
+    ? (rolling7Weight(previousBlockEntries, lastWeighIn.date) ?? (lastWeighIn.weightKg as number))
+    : undefined;
+
+  const keep = (record: { updatedAt?: string }) => (record.updatedAt ?? '') >= V6_WIPE_CUTOFF;
+
+  const dailyEntries = Object.fromEntries(
+    Object.entries((state.dailyEntries as Record<string, DailyEntry>) ?? {}).filter(
+      ([, e]) => e.date >= V6_BLOCK_START,
+    ),
+  );
+  const sessionLogs = Object.fromEntries(
+    Object.entries((state.sessionLogs as Record<string, SessionLog>) ?? {})
+      .filter(([, session]) => keep(session) && session.date >= V6_BLOCK_START)
+      .map(([id, session]) => [id, { ...session, phase: phaseForWeek(session.week) }]),
+  );
+  const benchmarkEntries = Object.fromEntries(
+    Object.entries((state.benchmarkEntries as Record<string, BenchmarkEntry>) ?? {}).filter(([, b]) => keep(b)),
+  );
+  const decisionEntries = Object.fromEntries(
+    Object.entries((state.decisionEntries as Record<string, DecisionEntry>) ?? {}).filter(([, d]) => keep(d)),
+  );
+  const protocol = state.caseStudyProtocol ?? null;
+
+  const defaults = defaultSettings();
+  return {
+    ...state,
+    settings: {
+      ...defaults,
+      blockStartDate: V6_BLOCK_START,
+      startWeightKg: seededStart !== undefined ? roundTo(seededStart, 1) : (oldSettings.startWeightKg ?? defaults.startWeightKg),
+      targetWeightKg: oldSettings.targetWeightKg ?? defaults.targetWeightKg,
+      weightUnit: oldSettings.weightUnit ?? defaults.weightUnit,
+      ...(oldSettings.reminderTime ? { reminderTime: oldSettings.reminderTime } : {}),
+      updatedAt: V6_WIPE_CUTOFF,
+    },
+    dailyEntries,
+    sessionLogs,
+    benchmarkEntries,
+    progressionEvents: (state.progressionEvents ?? []).filter((e) => e.date >= V6_BLOCK_START),
+    decisionEntries,
+    caseStudyProtocol: protocol && keep(protocol) ? protocol : null,
+  };
+}
+
+/**
  * Version-by-version migration so a schema change never wipes a block
  * mid-flight. Guards the zustand `persist` rehydration path AND the JSON
  * import path (`parseImportedState`) with the same logic.
@@ -243,30 +332,45 @@ function migrateToV7(state: LegacyPersistedState): LegacyPersistedState {
  * optional Settings field.
  */
 export function migrate(persistedState: unknown, fromVersion: number): PersistedState {
-  let state = persistedState as LegacyPersistedState;
+  return migrateTo(persistedState, fromVersion, SCHEMA_VERSION);
+}
 
-  if (fromVersion < 2) {
+/**
+ * Runs the version steps after `fromVersion` up to and including `toVersion`,
+ * then shapes the result. `migrate` always runs to SCHEMA_VERSION; stopping
+ * short exists so the pre-v8 steps stay testable now that v8 wipes the data
+ * they transform.
+ */
+export function migrateTo(persistedState: unknown, fromVersion: number, toVersion: number): PersistedState {
+  let state = persistedState as LegacyPersistedState;
+  const runs = (step: number) => fromVersion < step && toVersion >= step;
+
+  if (runs(2)) {
     state = migrateToV2(state);
   }
 
-  if (fromVersion < 3) {
+  if (runs(3)) {
     state = migrateToV3(state);
   }
 
-  if (fromVersion < 4) {
+  if (runs(4)) {
     state = migrateToV4(state);
   }
 
-  if (fromVersion < 5) {
+  if (runs(5)) {
     state = migrateToV5(state);
   }
 
-  if (fromVersion < 6) {
+  if (runs(6)) {
     state = migrateToV6(state);
   }
 
-  if (fromVersion < 7) {
+  if (runs(7)) {
     state = migrateToV7(state);
+  }
+
+  if (runs(8)) {
+    state = migrateToV8(state);
   }
 
   return {
@@ -448,6 +552,7 @@ const DAILY_ENTRY_CSV_HEADERS = [
   'carbsG',
   'fatG',
   'steps',
+  'checks',
   'note',
 ];
 
@@ -465,6 +570,10 @@ export function buildDailyEntriesCSV(dailyEntries: Record<string, DailyEntry>): 
         entry.carbsG,
         entry.fatG,
         entry.steps,
+        Object.entries(entry.checks ?? {})
+          .filter(([, done]) => done)
+          .map(([id]) => id)
+          .join('|'),
         entry.note,
       ]
         .map(csvEscape)

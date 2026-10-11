@@ -21,7 +21,7 @@ function sessionWith(date: string, exerciseId: string, sets: SetLog[]): SessionL
     id: `${date}:main`,
     date,
     week: 1,
-    phase: 'reentry',
+    phase: 'build1',
     day: 'mon',
     block: 'main',
     startedAt: `${date}T10:00:00.000Z`,

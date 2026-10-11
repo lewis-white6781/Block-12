@@ -177,7 +177,7 @@ export default function Settings() {
       <Card className="mt-4">
         <SectionHeader>Block</SectionHeader>
         <div className="mt-2 space-y-3">
-          <Field label="Block start date (Monday of week 1)">
+          <Field label="Block start date (day 1 of week 1)">
             <input
               type="date"
               className={inputClass}
@@ -233,73 +233,11 @@ export default function Settings() {
               }
             />
           </Field>
-          <Field label="Protein target low (g)">
-            <input
-              type="number"
-              inputMode="numeric"
-              className={inputClass}
-              value={settings.proteinTargetLow}
-              onChange={(e) => updateSettings({ proteinTargetLow: Number(e.target.value) })}
-            />
-          </Field>
-          <Field label="Protein target high (g)">
-            <input
-              type="number"
-              inputMode="numeric"
-              className={inputClass}
-              value={settings.proteinTargetHigh}
-              onChange={(e) => updateSettings({ proteinTargetHigh: Number(e.target.value) })}
-            />
-          </Field>
-          <Field label="Carb target low (g)">
-            <input
-              type="number"
-              inputMode="numeric"
-              placeholder="optional"
-              className={inputClass}
-              value={settings.carbTargetLow ?? ''}
-              onChange={(e) =>
-                updateSettings({ carbTargetLow: e.target.value === '' ? undefined : Number(e.target.value) })
-              }
-            />
-          </Field>
-          <Field label="Carb target high (g)">
-            <input
-              type="number"
-              inputMode="numeric"
-              placeholder="optional"
-              className={inputClass}
-              value={settings.carbTargetHigh ?? ''}
-              onChange={(e) =>
-                updateSettings({ carbTargetHigh: e.target.value === '' ? undefined : Number(e.target.value) })
-              }
-            />
-          </Field>
-          <Field label="Fat target low (g)">
-            <input
-              type="number"
-              inputMode="numeric"
-              placeholder="optional"
-              className={inputClass}
-              value={settings.fatTargetLow ?? ''}
-              onChange={(e) =>
-                updateSettings({ fatTargetLow: e.target.value === '' ? undefined : Number(e.target.value) })
-              }
-            />
-          </Field>
-          <Field label="Fat target high (g)">
-            <input
-              type="number"
-              inputMode="numeric"
-              placeholder="optional"
-              className={inputClass}
-              value={settings.fatTargetHigh ?? ''}
-              onChange={(e) =>
-                updateSettings({ fatTargetHigh: e.target.value === '' ? undefined : Number(e.target.value) })
-              }
-            />
-          </Field>
         </div>
+        <p className="mt-3 text-xs text-muted">
+          Daily calorie, protein, fat and carb targets come from the plan's nutrition table by your
+          7-day average weight — see Body. Calorie adjustments are applied and undone there.
+        </p>
       </Card>
 
       <Card className="mt-4">

@@ -56,26 +56,26 @@ export function isWithinBlock(index: number): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Block structure — SPEC-V5.0.md section 3.
+// Block structure — SPEC-V6.0.md section 3.
 //
-// One arc with a single deload at week 6: re-entry, accumulation, deload,
-// intensification, realization, consolidation. Both tables are indexed by
-// week rather than derived, because the phases are not equal in length.
+// Build 1, Build 2, a single deload at week 5, Build 3, Peak + test, and a
+// floor-only Christmas fortnight. Both tables are indexed by week rather than
+// derived, because the phases are not equal in length.
 // ---------------------------------------------------------------------------
 
 const PHASE_BY_WEEK: Phase[] = [
-  'reentry', // 1
-  'reentry', // 2
-  'accumulation', // 3
-  'accumulation', // 4
-  'accumulation', // 5
-  'deload', // 6
-  'intensification', // 7
-  'intensification', // 8
-  'intensification', // 9
-  'intensification', // 10
-  'realization', // 11
-  'consolidation', // 12
+  'build1', // 1
+  'build1', // 2
+  'build2', // 3
+  'build2', // 4
+  'deload', // 5
+  'build3', // 6
+  'build3', // 7
+  'build3', // 8
+  'peak', // 9
+  'peak', // 10
+  'christmas', // 11
+  'christmas', // 12
 ];
 
 export function phaseForWeek(week: number): Phase {
@@ -83,12 +83,12 @@ export function phaseForWeek(week: number): Phase {
 }
 
 // The highest RPE the plan itself prescribes on the STRENGTH scale in each
-// week, read off the SPEC-V5.0.md tables. Used as the stop-rule ceiling, so a
-// set logged above it means the session drifted off plan. Cardio prescribes
-// RPE 9–9.5 on the run scale in most weeks; that scale is exempt from the cap.
-const RPE_CAP_BY_WEEK = [8, 8, 8.5, 8.5, 9, 7, 8, 8.5, 8.5, 9, 9, 8];
+// week, read off the "Sets by phase" table. Used as the stop-rule ceiling, so a
+// set logged above it means the session drifted off plan. The Christmas
+// fortnight prescribes no RPE at all ("—"), so it has no ceiling: null.
+const RPE_CAP_BY_WEEK: (number | null)[] = [8.5, 8.5, 8.5, 8.5, 7, 9, 9, 9, 10, 10, null, null];
 
-export function weekRpeCap(week: number): number {
+export function weekRpeCap(week: number): number | null {
   return RPE_CAP_BY_WEEK[Math.min(12, Math.max(1, week)) - 1];
 }
 
@@ -117,11 +117,11 @@ export function resolvePrescription(exercise: Exercise, week: number): Prescript
  * actually prescribed in the given week.
  *
  * "Prescribed" means a prescription resolves AND it asks for at least one set.
- * `sets: 0` is a deliberate opt-out (SPEC-V4.0.md section 4): the Wednesday
- * recovery run has no volume in weeks 1, 2 and 4, and the Sunday long-run
- * finish only exists in weeks 9–11. Authoring those weeks explicitly as zero is
- * what stops the nearest-earlier fallback above from carrying a neighbouring
- * week's numbers into them.
+ * `sets: 0` is a deliberate opt-out (SPEC-V4.0.md section 4). v6.0 uses it
+ * for the Christmas fortnight: weeks 11–12 run the floor session only, so every
+ * exercise outside the floor is authored as zero there. Authoring those weeks
+ * explicitly is what stops the nearest-earlier fallback above from carrying
+ * week 10's numbers into them.
  *
  * Shared by Today and SessionRunner, which need the same day -> session pipeline.
  */

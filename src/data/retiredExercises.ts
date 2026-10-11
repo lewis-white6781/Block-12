@@ -17,6 +17,7 @@
 // This is the general mechanism for any mid-block programming change, not a
 // one-off for the v3.0 Monday swap.
 import type { Exercise, Prescription } from '../domain/types';
+import { retiredV5Exercises } from './retiredV5';
 
 // ---------------------------------------------------------------------------
 // v4.0 authoring helpers, FROZEN. The v5.0 retirements below were copied
@@ -1768,4 +1769,8 @@ export const retiredExercises: Exercise[] = [
       { weeks: [12], sets: 0 },
     ],
   },
+
+  // retired in v6.0: the whole v5.0 programme apart from the twenty-four ids
+  // that carried over. Frozen verbatim, with its helpers, in retiredV5.ts.
+  ...retiredV5Exercises,
 ];

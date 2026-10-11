@@ -12,7 +12,7 @@ import { currentWeek, phaseForWeek } from '../domain/phase';
 import { useToday } from '../hooks/useToday';
 import { fmt } from '../domain/format';
 import { fmtKg, fmtKgSigned } from '../domain/units';
-import { bestBySession, bestOf, formatBest, trendArrow } from '../domain/performance';
+import { formatBest, trendArrow } from '../domain/performance';
 import { buildWeeklyReview, checkEndOfBlockTargets } from '../domain/review';
 import type { TargetStatus } from '../domain/review';
 import { buildWeekCoverage } from '../domain/coverage';
@@ -38,7 +38,6 @@ export default function Review() {
   const settings = useStore((s) => s.settings);
   const sessionLogs = useStore((s) => s.sessionLogs);
   const dailyEntries = useStore((s) => s.dailyEntries);
-  const benchmarkEntries = useStore((s) => s.benchmarkEntries);
   const progressionEvents = useStore((s) => s.progressionEvents);
   const decisionEntries = useStore((s) => s.decisionEntries);
 
@@ -86,32 +85,16 @@ export default function Review() {
     [selectedWeek, settings, sessionLogs, dailyEntries, progressionEvents],
   );
 
-  /**
-   * Best of the last 3 sessions as a percentage of the weeks 1-2 baseline, in
-   * the movement's own unit. v3.0 replacement for the Exercise Progress Index
-   * (SPEC-V3.0.md section 1): the "broadly maintained" / "no decline" week-12
-   * targets genuinely want a ratio, they just no longer want a difficulty
-   * multiplier inside it.
-   */
-  function week12RetentionPct(exerciseId: string): number | null {
-    const exercise = program.find((e) => e.id === exerciseId);
-    if (!exercise) return null;
-    const history = bestBySession(sessionLogs, exercise);
-    const baseline = bestOf(history.filter((h) => h.week <= 2).map((h) => h.best));
-    const current = bestOf(history.slice(-3).map((h) => h.best));
-    if (!baseline || !current || baseline.value === 0) return null;
-    return (current.value / baseline.value) * 100;
-  }
-
+  // v6.0: the checklist judges the weeks 9–10 peak test, so it opens from
+  // week 10 rather than waiting for the floor-only Christmas fortnight.
   const targetChecklist =
-    selectedWeek === 12
+    selectedWeek >= 10
       ? checkEndOfBlockTargets({
           targetGroups: targets,
+          program,
           sessionLogs,
           dailyEntries,
-          benchmarkEntries,
           settings,
-          week12RetentionPct,
           asOfDate: format(today, 'yyyy-MM-dd'),
         })
       : null;
@@ -200,7 +183,7 @@ export default function Review() {
       <Card className="mt-4">
         <SectionHeader>Nutrition</SectionHeader>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <Stat label="Protein in range" value={`${review.nutrition.proteinAdherenceDays}/7 days`} />
+          <Stat label="Protein target hit" value={`${review.nutrition.proteinAdherenceDays}/7 days`} />
           <Stat
             label="Mean kcal"
             value={review.nutrition.meanCalories !== null ? fmt(review.nutrition.meanCalories, 0) : '—'}
@@ -213,6 +196,15 @@ export default function Review() {
             label="Mean fat"
             value={review.nutrition.meanFatG !== null ? `${fmt(review.nutrition.meanFatG, 0)} g` : '—'}
           />
+        </div>
+      </Card>
+
+      <Card className="mt-4">
+        <SectionHeader>Daily ticks</SectionHeader>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {review.checks.map((check) => (
+            <Stat key={check.id} label={check.label} value={`${check.done}/${check.planned} days`} />
+          ))}
         </div>
       </Card>
 
@@ -329,7 +321,7 @@ export default function Review() {
 
       {targetChecklist && (
         <Card className="mt-4">
-          <SectionHeader>Week-12 target checklist</SectionHeader>
+          <SectionHeader>End-of-block checklist</SectionHeader>
           <div className="mt-2 space-y-3">
             {targetChecklist.map((group) => (
               <div key={group.id}>

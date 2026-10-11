@@ -1,15 +1,14 @@
-// Flexibility benchmarks + weekly progression variable — SPEC-V5.0.md section 6.
+// Flexibility benchmarks + weekly progression variable — SPEC-V5.0.md section 6,
+// emptied by SPEC-V6.0.md section 5.
 
 /**
  * The weeks the six flexibility benchmarks are measured in.
  *
- * v5.0: week 1 for the baseline and week 12 for the comparison — both
- * flexibility sessions name week 12 as "+ benchmark" (SPEC-V5.0.md section 6).
- * There is no mid-block test: week 6 is the deload and the plan says to
- * maintain positions there rather than chase ROM, which a measurement would
- * invite.
+ * v6.0: none. The Cut to New Year plan prescribes no flexibility benchmark, so
+ * Today and Review no longer ask for one. The definitions below stay so the
+ * BenchmarkForm and any older entries keep rendering.
  */
-export const BENCHMARK_WEEKS = [1, 12];
+export const BENCHMARK_WEEKS: number[] = [];
 
 export function isBenchmarkWeek(week: number): boolean {
   return BENCHMARK_WEEKS.includes(week);
@@ -81,28 +80,13 @@ export interface WeeklyProgressionVariable {
 }
 
 /**
- * The one thing to move this week. Exactly one is shown, and a second axis is
- * blocked from logging (the one-variable rule).
+ * The one flexibility variable to move each week.
  *
- * v5.0 follows the block's single arc: the flexibility set and RPE tables
- * (SPEC-V5.0.md section 6) climb from RPE 6 to 7–7.5, halve in the week-6
- * deload, and drop to an easy benchmark week at 12. The axis to move is
- * always ROM → control → load, in that order.
+ * v6.0: none. The plan's Mobility + Core session states fixed doses at
+ * "Stretch intensity RPE 6–7.5" and its daily mobility is a tick box, so there
+ * is no weekly variable to show. v5.0's list described its own block's arc.
  */
-export const weeklyProgressionVariables: WeeklyProgressionVariable[] = [
-  { week: 1, description: 're-entry — establish honest RPE 6 positions, measure the six benchmarks' },
-  { week: 2, description: 're-entry — same positions, better control' },
-  { week: 3, description: 'accumulation — a third loaded set; increase usable ROM slightly' },
-  { week: 4, description: 'accumulation — RPE 7; hold the new ROM under control' },
-  { week: 5, description: 'accumulation — a third static set; ROM before load' },
-  { week: 6, description: 'deload — roughly half volume, RPE 5–6, maintain positions rather than chasing ROM' },
-  { week: 7, description: 'intensification — resume at RPE 6.5 from the pre-deload positions' },
-  { week: 8, description: 'intensification — RPE 7; modest external load where control is proven' },
-  { week: 9, description: 'intensification — three sets of everything; lower supports' },
-  { week: 10, description: 'intensification — RPE 7–7.5 strong end-range work, still relaxed' },
-  { week: 11, description: 'realization — hold the best positions of the block at RPE 7–7.5' },
-  { week: 12, description: 'consolidation — easy volume, re-measure all six benchmarks' },
-];
+export const weeklyProgressionVariables: WeeklyProgressionVariable[] = [];
 
 // Shown as a checklist under the weekly progression variable. Folds in
 // SPEC-V5.0.md section 7's joint/tendon rule — flexibility work is not where a

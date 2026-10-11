@@ -17,16 +17,15 @@ export interface SkillDefinition {
   ladderId?: string;
 }
 
-// v5.0: five headline skills, one per objective in SPEC-V5.0.md section 9.
-// The long cardio session joins the four strength skills so the Progress
-// screen shows every objective the block sets, not only the gym ones.
+// v6.0: five headline skills — the ★ lifts that carry each objective. The
+// trap bar deadlift replaces v5.0's long cardio session, which is retired.
 // Each must point at something still PRESCRIBED, or it can never gain a data point.
 export const SKILLS: SkillDefinition[] = [
   { id: 'frontLever', label: 'Front lever', exerciseId: 'fl-hold-primary', ladderId: 'frontLever' },
   { id: 'hspu', label: 'HSPU', exerciseId: 'hspu-primary', ladderId: 'hspu' },
   { id: 'pullup', label: 'Weighted pull-up', exerciseId: 'ring-pullup' },
   { id: 'dip', label: 'Weighted ring dip', exerciseId: 'ring-dip' },
-  { id: 'longCardio', label: 'Long cardio', exerciseId: 'sun-long-cardio' },
+  { id: 'deadlift', label: 'Trap bar deadlift', exerciseId: 'trap-bar-deadlift' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -125,15 +124,16 @@ export function checkStopRule(ctx: StopRuleContext): StopRuleResult | null {
   // (SPEC-V4.0.md section 1), so they are not judged here.
   if (scale !== 'strength') return null;
 
-  if (set.rpe === 10) {
+  // v6.0: Peak + test (weeks 9–10) prescribes RPE 9.5–10, so RPE 10 is only a
+  // failure warning in the weeks whose ceiling is below it. Christmas has no
+  // ceiling (null) — nothing is prescribed — so failure still warns there.
+  const cap = weekRpeCap(week);
+  if (set.rpe === 10 && (cap === null || cap < 10)) {
     return { severity: 'amber', message: "Failure adds fatigue you can't afford at this frequency." };
   }
 
-  if (set.rpe !== undefined) {
-    const cap = weekRpeCap(week);
-    if (set.rpe > cap) {
-      return { severity: 'amber', message: `Week ${week} prescribes nothing above RPE ${cap}.` };
-    }
+  if (set.rpe !== undefined && cap !== null && set.rpe > cap) {
+    return { severity: 'amber', message: `Week ${week} prescribes nothing above RPE ${cap}.` };
   }
 
   return null;
@@ -200,6 +200,8 @@ const ELBOW_EXERCISE_IDS = new Set([
   'fl-hold-banded',
   'wall-curl',
   'hammer-curl',
+  // v6.0 additions
+  'ring-curl-b',
   // v1–v3, retired
   'fl-hard-iso',
   'fl-row',
@@ -221,6 +223,8 @@ const SHOULDER_EXERCISE_IDS = new Set([
   'lateral-raise-c',
   // v5.0 additions
   'rear-delt-fly',
+  // v6.0 additions
+  'ring-reverse-fly',
   // v1–v3, retired
   'pike-hspu',
   'press-to-hs',
@@ -255,6 +259,9 @@ const ACHILLES_EXERCISE_IDS = new Set([
   'fri-hiit-intervals',
   'fri-hiit-cooldown',
   'sun-long-cardio',
+  // v6.0 additions — the Sunday jumps load the same tendon
+  'broad-jump',
+  'lateral-bound',
   // v1–v3, retired
   'sprints',
   'easy-run',
@@ -339,7 +346,7 @@ export function detectStagnation(params: {
   const { exercise, history, health, phase, progressionEvents } = params;
 
   if (!isFlat(history)) return null;
-  if (phase === 'deload' || phase === 'consolidation') return null;
+  if (phase === 'deload' || phase === 'christmas') return null;
 
   if (!isHealthy(health)) {
     const reasons: string[] = [];

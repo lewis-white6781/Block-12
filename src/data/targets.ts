@@ -1,4 +1,9 @@
-// End-of-block benchmarks — SPEC-V5.0.md section 9. Rendered as a week-12 checklist.
+// End-of-block checklist — SPEC-V6.0.md section 9. Shown in Review from week 10.
+//
+// The Cut to New Year plan states no end-of-block goals of its own beyond the
+// cut itself and a "Peak + test" fortnight (weeks 9–10). So the checklist is
+// exactly that: the target weight, and every ★ exercise tested in weeks 9–10
+// against its week-1 best. Nothing else is claimed.
 //
 // Item ORDER is load-bearing: review.ts's checkEndOfBlockTargets matches on
 // `group.id` plus the item's index to decide which items it can auto-check.
@@ -10,71 +15,43 @@ export interface TargetGroup {
   items: string[];
 }
 
+/**
+ * The ★ exercises, in the order the `test` group lists them. review.ts reads
+ * this to resolve each test item to its exercise.
+ */
+export const PEAK_TEST_EXERCISE_IDS = [
+  'hspu-primary',
+  'ring-dip',
+  'ring-pullup',
+  'fl-hold-primary',
+  'fl-raise',
+  'fl-row-banded',
+  'trap-bar-deadlift',
+  'bulgarian-split-squat',
+];
+
+export const PEAK_TEST_WEEKS = [9, 10];
+
 export const targets: TargetGroup[] = [
   {
     id: 'body',
     label: 'Body composition',
     items: [
       'at target weight', // auto: settings.targetWeightKg
-      'waist measurably smaller',
-      'standardised photos taken and compared',
     ],
   },
   {
-    id: 'hspu',
-    label: 'HSPU & handstand',
+    id: 'test',
+    label: 'Peak test (weeks 9–10) beats week 1',
     items: [
-      'more ROM or reps in the primary pike HSPU', // auto: week 1 -> week 12
-      'more reps or ROM in the wall-assisted HSPU', // auto
-      'more consistent wall-release balance',
-    ],
-  },
-  {
-    id: 'frontLever',
-    label: 'Front lever',
-    items: [
-      'hardest clean 5–8 s progression at open advanced tuck or beyond', // auto
-      'less band assistance needed for the full shape',
-      'harder front-lever raise leverage',
-      'less assistance on the front-lever pull',
-    ],
-  },
-  {
-    id: 'strength',
-    label: 'Strength',
-    items: [
-      'weighted ring dip load held for 4–6 clean reps', // auto: >= 95% of block best
-      'weighted pull-up load held for 3–5 clean reps', // auto: >= 95% of block best
-      'hack squat performance held', // auto: >= 95% of block best
-    ],
-  },
-  {
-    id: 'core',
-    label: 'Core',
-    items: [
-      'harder dragon flag progression', // auto
-      'deeper standing rollout', // auto
-      'harder windshield-wiper progression', // auto
-    ],
-  },
-  {
-    id: 'flexibility',
-    label: 'Flexibility',
-    items: [
-      'measured progress across the six chains', // auto, week 1 -> week 12
-      'pancake sternum closer to the floor',
-      'middle and front split pelvis closer to the floor',
-      'better shoulder-flexion wall test and bridge',
-    ],
-  },
-  {
-    id: 'cardio',
-    label: 'Cardio',
-    items: [
-      'moderate session built to 30 min', // auto
-      'eight quality HIIT intervals established', // auto
-      'long session built to 80+ min', // auto
-      'more output at the same RPE across all three sessions',
+      'Primary HSPU', // auto, PEAK_TEST_EXERCISE_IDS[0]
+      'Weighted ring dip', // auto
+      'Weighted pull-up', // auto
+      'Hard front lever hold', // auto
+      'Front lever raise or straddle negative', // auto
+      'Band-assisted front lever row', // auto
+      'Trap bar deadlift', // auto
+      'Deep rear-foot-elevated split squat', // auto
     ],
   },
 ];

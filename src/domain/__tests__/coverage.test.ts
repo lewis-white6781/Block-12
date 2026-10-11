@@ -12,7 +12,7 @@ function session(id: string, patch: Partial<SessionLog> = {}): SessionLog {
     id,
     date,
     week: 1,
-    phase: 'reentry',
+    phase: 'build1',
     day: 'mon',
     block: block as SessionLog['block'],
     startedAt: `${date}T10:00:00.000Z`,
@@ -64,8 +64,8 @@ describe('buildWeekCoverage', () => {
         completedAt: '2026-09-07T11:00:00.000Z',
         exercises: [{ exerciseId: 'x', sets: [{ id: 's1', techniqueFlags: [], score: 0 }] }],
       }),
-      '2026-09-08:main': session('2026-09-08:main', {
-        day: 'tue',
+      '2026-09-10:main': session('2026-09-10:main', {
+        day: 'thu',
         exercises: [{ exerciseId: 'x', sets: [{ id: 's2', techniqueFlags: [], score: 0 }] }],
       }),
     };

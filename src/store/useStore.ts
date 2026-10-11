@@ -12,6 +12,7 @@ import type {
   DayId,
   DecisionEntry,
   ExerciseLog,
+  NutritionAdjustment,
   Phase,
   ProgressionEvent,
   Readiness,
@@ -33,6 +34,12 @@ interface StoreActions {
   updateSettings: (patch: Partial<Settings>) => void;
   /** updatedAt is stamped by the reducer, never supplied by the caller. */
   upsertDailyEntry: (entry: Partial<DailyEntry> & { date: string }) => void;
+  /** Flips one of the day's tick boxes (handstand + mobility, football). */
+  toggleDailyCheck: (date: string, checkId: string) => void;
+  /** Records a calorie-target change from the weekly nutrition check. */
+  addNutritionAdjustment: (adjustment: NutritionAdjustment) => void;
+  /** Removes the most recent calorie-target change — an undo for a mis-tap. */
+  undoLastNutritionAdjustment: () => void;
   /** Creates the session if it doesn't already exist; otherwise leaves it untouched. */
   startSession: (params: StartSessionParams) => string;
   logSet: (sessionId: string, exerciseId: string, setLog: SetLog) => void;
@@ -91,6 +98,36 @@ export const useStore = create<StoreState>()(
           dailyEntries: {
             ...s.dailyEntries,
             [entry.date]: { ...s.dailyEntries[entry.date], ...entry, updatedAt: new Date().toISOString() },
+          },
+        })),
+
+      toggleDailyCheck: (date, checkId) =>
+        set((s) => {
+          const existing = s.dailyEntries[date];
+          const checks = { ...existing?.checks, [checkId]: !existing?.checks?.[checkId] };
+          return {
+            dailyEntries: {
+              ...s.dailyEntries,
+              [date]: { ...existing, date, checks, updatedAt: new Date().toISOString() },
+            },
+          };
+        }),
+
+      addNutritionAdjustment: (adjustment) =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            nutritionAdjustments: [...(s.settings.nutritionAdjustments ?? []), adjustment],
+            updatedAt: new Date().toISOString(),
+          },
+        })),
+
+      undoLastNutritionAdjustment: () =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            nutritionAdjustments: (s.settings.nutritionAdjustments ?? []).slice(0, -1),
+            updatedAt: new Date().toISOString(),
           },
         })),
 

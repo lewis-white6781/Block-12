@@ -105,21 +105,22 @@ describe('null propagation', () => {
 });
 
 describe('corridorStatus boundaries', () => {
-  it('is tooSlow when rate is above -0.30 kg/wk', () => {
+  // v6.0: the nutrition rules' 0.25–0.75 kg/week band.
+  it('is tooSlow when rate is above -0.25 kg/wk', () => {
     expect(corridorStatus(-0.1)).toBe('tooSlow');
     expect(corridorStatus(0.1)).toBe('tooSlow');
   });
 
-  it('is onTrack at the -0.30 boundary itself', () => {
-    expect(corridorStatus(-0.3)).toBe('onTrack');
+  it('is onTrack at the -0.25 boundary itself', () => {
+    expect(corridorStatus(-0.25)).toBe('onTrack');
   });
 
-  it('is onTrack at the -0.60 boundary itself', () => {
-    expect(corridorStatus(-0.6)).toBe('onTrack');
+  it('is onTrack at the -0.75 boundary itself', () => {
+    expect(corridorStatus(-0.75)).toBe('onTrack');
   });
 
-  it('is tooFast below -0.60 kg/wk', () => {
-    expect(corridorStatus(-0.61)).toBe('tooFast');
+  it('is tooFast below -0.75 kg/wk', () => {
+    expect(corridorStatus(-0.76)).toBe('tooFast');
   });
 });
 
@@ -129,7 +130,7 @@ describe('weeklySummaries', () => {
       id,
       date: '2026-01-01',
       week,
-      phase: 'reentry',
+      phase: 'build1',
       day: 'mon',
       block: 'main',
       startedAt: '2026-01-01T08:00:00.000Z',

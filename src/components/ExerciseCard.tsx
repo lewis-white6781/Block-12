@@ -38,9 +38,10 @@ export default function ExerciseCard({ order, exercise, prescription }: Exercise
   return (
     <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
       <span className="text-text">
-        {order} {exercise.name}
-        {/* Marks the alternated pairs and triples — Monday's 7A/7B, Friday's
-            6A/6B/6C and 8A/8B. Without it they read as separate slots. */}
+        {order || '—'} {exercise.name}
+        {/* Marks the superset pairs, which share their row's number —
+            Upper A's 5, Upper B's 5, Lower's 1 and 5. Without it they read as
+            two separate slots. */}
         {exercise.supersetId && <span className="ml-1 text-xs text-muted">⇄</span>}
       </span>
       <span className="shrink-0 tabular-nums text-muted">{formatPrescription(prescription)}</span>

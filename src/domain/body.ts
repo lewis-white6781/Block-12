@@ -5,9 +5,11 @@ import type { DailyEntry, SessionLog, Settings } from './types';
 
 export const TUNING = {
   MIN_ROLLING_POINTS: 4,
-  // weeklyRateKg above this is losing weight too slowly; below the other is too fast.
-  CORRIDOR_TOO_SLOW_KG: -0.3,
-  CORRIDOR_TOO_FAST_KG: -0.6,
+  // weeklyRateKg above this is losing weight too slowly; below the other is too
+  // fast. v6.0: the nutrition rules' own band — "losing under 0.25 kg/week" and
+  // "losing over 0.75 kg/week" (SPEC-V6.0.md section 6).
+  CORRIDOR_TOO_SLOW_KG: -0.25,
+  CORRIDOR_TOO_FAST_KG: -0.75,
 };
 
 function rollingMean(

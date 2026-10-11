@@ -24,7 +24,7 @@ const DEFAULT_QUESTION =
   'Over a 12-week block, how can performance, adherence and recovery data inform progression ' +
   'decisions while monitoring strength during weight loss?';
 
-const ANCHOR_CANDIDATES = ['ring-dip', 'ring-pullup', 'hack-squat', 'fl-hold-primary', 'hspu-primary'];
+const ANCHOR_CANDIDATES = ['ring-dip', 'ring-pullup', 'trap-bar-deadlift', 'fl-hold-primary', 'hspu-primary'];
 
 const DEFAULT_BASELINE = 'Best qualifying set in weeks 1–2, within the same variant and assistance tier.';
 const DEFAULT_ENDPOINT = 'Best qualifying set in weeks 11–12, within the same variant and assistance tier.';

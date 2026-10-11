@@ -279,7 +279,7 @@ means "unknown", never "skipped".
 |---|---|
 | block12-sets-*.csv | one recorded set (or attempt record) |
 | block12-sessions-*.csv | one recorded session, with its readiness check-in |
-| block12-daily-*.csv | one day's recorded weight / nutrition / steps |
+| block12-daily-*.csv | one day's recorded weight / nutrition / steps / tick boxes |
 | block12-planned-sessions-*.csv | one PRESCRIBED session slot, including dates with no log |
 | block12-exercises-*.csv | one exercise definition (current and retired) |
 | block12-decisions-*.csv | one decision-journal entry with its follow-up |
@@ -310,6 +310,10 @@ means "unknown", never "skipped".
   a later day than the decision it records.
 - \`phase\` (sessions/sets): the training phase the week prescribes. Deload
   weeks prescribe LESS work — lower volume there is adherence, not decline.
+  The Christmas weeks (11–12) prescribe floor sessions only.
+- \`checks\` (daily): the day's ticked boxes, \`|\`-separated —
+  \`handstand-mobility\` (due daily) and \`football\` (due Wed/Fri). An unticked
+  box and a day never opened look the same; read it against the due days.
 - Demo data: if \`demoSeededAt\` in the manifest is non-null, every record in
   the pack is synthetic demonstration data.
 `;

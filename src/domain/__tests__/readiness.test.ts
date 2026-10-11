@@ -56,8 +56,8 @@ describe('jointVolumeWarning', () => {
 
   it('stays silent on a day that does not load the joint', () => {
     const shoulderSore = [readiness({ shoulderIrritation: 3 }), readiness({ shoulderIrritation: 3 })];
-    // Thursday is a single easy run — nothing on it presses.
-    expect(jointVolumeWarning('shoulder', 'thu', shoulderSore)).toBeNull();
-    expect(jointVolumeWarnings('thu', shoulderSore)).toEqual([]);
+    // Tuesday is a rest day — nothing on it presses.
+    expect(jointVolumeWarning('shoulder', 'tue', shoulderSore)).toBeNull();
+    expect(jointVolumeWarnings('tue', shoulderSore)).toEqual([]);
   });
 });

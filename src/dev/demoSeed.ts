@@ -4,7 +4,7 @@
 // PRNG) so repeated loads are reproducible, which makes it useful for
 // screenshotting and for the vitest sanity check in __tests__/demoSeed.test.ts.
 import { addDays, format, parseISO, startOfWeek, subDays } from 'date-fns';
-import { program } from '../data/program';
+import { dailyChecksFor, program } from '../data/program';
 import { ladders } from '../data/ladders';
 import { BENCHMARK_WEEKS, benchmarks } from '../data/mobility';
 import { exercisesFor, phaseForWeek, resolvePrescription } from '../domain/phase';
@@ -21,9 +21,8 @@ import type {
   TechniqueFlag,
 } from '../domain/types';
 
-// v4.0: eight weeks rather than six, so the demo spans two complete loading
-// waves — it now contains both deloads (4, 8) and both of the benchmark weeks
-// the flexibility chart needs a delta between (1, 8).
+// Eight weeks, so the demo spans the week-5 deload and three weeks of Build 3
+// either side of it.
 const DEMO_WEEKS = 8;
 const DAY_ORDER: DayId[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -214,7 +213,21 @@ export function generateDemoState(): PersistedState {
       const remaining = Math.max(0, calories - proteinG * 4);
       const carbsG = Math.round((remaining * 0.6) / 4);
       const fatG = Math.round((remaining * 0.4) / 9);
-      dailyEntries[date] = { date, weightKg, proteinG, carbsG, fatG, calories, updatedAt: makeUpdatedAt(date) };
+      // v6.0 daily tick boxes: handstand + mobility most days, football on
+      // its two days with the odd one missed, so the Review counts are not 7/7.
+      const checks = Object.fromEntries(
+        dailyChecksFor(dayId).map((check) => [check.id, (globalDayIndex + check.id.length) % 6 !== 0]),
+      );
+      dailyEntries[date] = {
+        date,
+        weightKg,
+        proteinG,
+        carbsG,
+        fatG,
+        calories,
+        checks,
+        updatedAt: makeUpdatedAt(date),
+      };
 
       const amExercises = exercisesFor(program, dayId, 'am', week);
 

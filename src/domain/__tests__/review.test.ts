@@ -28,28 +28,13 @@ function mainSession(date: string, week: number, exerciseId: string, sets: SetLo
     id: `${date}:main`,
     date,
     week,
-    phase: 'reentry',
+    phase: 'build1',
     day: 'mon',
     block: 'main',
     startedAt: `${date}T08:00:00.000Z`,
     completedAt: `${date}T09:00:00.000Z`,
     exercises: [{ exerciseId, sets }],
     updatedAt: `${date}T09:00:00.000Z`,
-  };
-}
-
-function longRunSession(date: string, week: number, sets: SetLog[]): SessionLog {
-  return {
-    id: `${date}:main`,
-    date,
-    week,
-    phase: 'realization',
-    day: 'sun',
-    block: 'main',
-    startedAt: `${date}T08:00:00.000Z`,
-    completedAt: `${date}T11:00:00.000Z`,
-    exercises: [{ exerciseId: 'sun-long-cardio', sets }],
-    updatedAt: `${date}T11:00:00.000Z`,
   };
 }
 
@@ -68,16 +53,16 @@ describe('buildWeeklyReview', () => {
       progressionEvents: [],
       mobilityVariableForWeek: () => null,
     });
-    // Six main sessions (Thursday is a rest day), GTG on Mon/Wed/Fri, and four
-    // later sessions: Monday cardio, Thursday and Sunday flexibility, Friday HIIT.
-    expect(review.sessionsPlanned).toEqual({ main: 6, am: 3, later: 4 });
+    // Four gym sessions: Upper A, Upper B, Mobility + Core, Lower. Football and
+    // handstand + mobility are daily tick boxes, not sessions.
+    expect(review.sessionsPlanned).toEqual({ main: 4, am: 0, later: 0 });
     expect(review.sessionsCompleted.main).toBe(1);
-    expect(review.phase).toBe('reentry');
+    expect(review.phase).toBe('build1');
   });
 
-  it('plans the same session count every week — nothing in v5.0 opts out of a week', () => {
+  it('keeps four sessions through Christmas, as floor sessions', () => {
     const review = buildWeeklyReview({
-      week: 6,
+      week: 11,
       settings: settings(),
       program,
       ladders,
@@ -86,7 +71,47 @@ describe('buildWeeklyReview', () => {
       progressionEvents: [],
       mobilityVariableForWeek: () => null,
     });
-    expect(review.sessionsPlanned).toEqual({ main: 6, am: 3, later: 4 });
+    expect(review.sessionsPlanned).toEqual({ main: 4, am: 0, later: 0 });
+  });
+
+  it('counts the daily tick boxes against the days they were due', () => {
+    const review = buildWeeklyReview({
+      week: 1,
+      settings: settings(),
+      program,
+      ladders,
+      sessionLogs: {},
+      dailyEntries: {
+        // 2026-01-07 is a Wednesday
+        '2026-01-07': { date: '2026-01-07', checks: { football: true, 'handstand-mobility': true }, updatedAt: 'x' },
+        '2026-01-08': { date: '2026-01-08', checks: { 'handstand-mobility': true }, updatedAt: 'x' },
+      },
+      progressionEvents: [],
+      mobilityVariableForWeek: () => null,
+    });
+    expect(review.checks).toEqual([
+      { id: 'handstand-mobility', label: 'Handstand + mobility', done: 2, planned: 7 },
+      { id: 'football', label: 'Football', done: 1, planned: 2 },
+    ]);
+  });
+
+  it('counts protein days against the nutrition table, not a settings band', () => {
+    // 80 kg -> the 79.0+ row, protein 175 g.
+    const dailyEntries: Record<string, DailyEntry> = {
+      '2026-01-05': { date: '2026-01-05', weightKg: 80, proteinG: 175, updatedAt: 'x' },
+      '2026-01-06': { date: '2026-01-06', weightKg: 80, proteinG: 172, updatedAt: 'x' },
+    };
+    const review = buildWeeklyReview({
+      week: 1,
+      settings: settings(),
+      program,
+      ladders,
+      sessionLogs: {},
+      dailyEntries,
+      progressionEvents: [],
+      mobilityVariableForWeek: () => null,
+    });
+    expect(review.nutrition.proteinAdherenceDays).toBe(1);
   });
 
   it('reports weight status null with no daily entries, and a value once there is enough data', () => {
@@ -130,17 +155,17 @@ describe('buildWeeklyReview', () => {
 
   it('carries next week\'s phase note and mobility variable, and is null for week 12', () => {
     const review = buildWeeklyReview({
-      week: 5,
+      week: 4,
       settings: settings(),
       program,
       ladders,
       sessionLogs: {},
       dailyEntries: {},
       progressionEvents: [],
-      mobilityVariableForWeek: (w) => (w === 6 ? 'half volume, re-measure' : null),
+      mobilityVariableForWeek: (w) => (w === 5 ? 'half volume, re-measure' : null),
     });
-    expect(review.nextWeek?.week).toBe(6);
-    // Week 6 is the block's one deload.
+    expect(review.nextWeek?.week).toBe(5);
+    // Week 5 is the block's one deload.
     expect(review.nextWeek?.phase).toBe('deload');
     expect(review.nextWeek?.mobilityVariable).toBe('half volume, re-measure');
 
@@ -155,7 +180,8 @@ describe('buildWeeklyReview', () => {
       mobilityVariableForWeek: () => null,
     });
     expect(week12.nextWeek).toBeNull();
-    expect(week12.benchmarkWeek).toBe(true);
+    // v6.0 prescribes no flexibility benchmark.
+    expect(week12.benchmarkWeek).toBe(false);
   });
 });
 
@@ -163,11 +189,10 @@ describe('checkEndOfBlockTargets', () => {
   // The real groups, since the auto-checks match on group id AND item index.
   const base = {
     targetGroups: targets,
+    program,
     sessionLogs: {},
     dailyEntries: {},
-    benchmarkEntries: {},
     settings: settings(),
-    week12RetentionPct: () => null,
     asOfDate: '2026-03-30',
   };
 
@@ -199,7 +224,6 @@ describe('checkEndOfBlockTargets', () => {
     const unmet = checkEndOfBlockTargets({ ...base, dailyEntries: entriesAt(76), asOfDate });
     expect(group(unmet, 'body').items[0].status).toBe('unmet');
 
-    // Move the goal and the same weight stops qualifying.
     const movedGoal = checkEndOfBlockTargets({
       ...base,
       dailyEntries: entriesAt(72.5),
@@ -209,70 +233,33 @@ describe('checkEndOfBlockTargets', () => {
     expect(group(movedGoal, 'body').items[0].status).toBe('unmet');
   });
 
-  it('marks pull-up and dip maintenance from week-12 retention percentages', () => {
-    const result = checkEndOfBlockTargets({
-      ...base,
-      week12RetentionPct: (id: string) => (id === 'ring-dip' ? 96 : id === 'ring-pullup' ? 95 : null),
-    });
-    expect(group(result, 'strength').items[0].status).toBe('met'); // dip
-    expect(group(result, 'strength').items[1].status).toBe('met'); // pull-up
-    expect(group(result, 'strength').items[2].status).toBe('unknown'); // hack squat: no data
-
-    const declined = checkEndOfBlockTargets({ ...base, week12RetentionPct: () => 80 });
-    expect(group(declined, 'strength').items[0].status).toBe('unmet');
+  it('lists every ★ exercise in the peak test, in PEAK_TEST_EXERCISE_IDS order', () => {
+    expect(group(checkEndOfBlockTargets(base), 'test').items).toHaveLength(8);
   });
 
-  it('marks the long cardio met once one session reaches 80 minutes', () => {
-    const short = checkEndOfBlockTargets({
-      ...base,
-      sessionLogs: { s: longRunSession('2026-03-22', 11, [set({ minutes: 75, rpe: 3 })]) },
+  it('judges a weighted lift on load first: a heavier peak set beats more week-1 reps', () => {
+    const logs = (week1: SetLog, peak: SetLog): Record<string, SessionLog> => ({
+      a: mainSession('2026-01-05', 1, 'ring-dip', [week1]),
+      b: mainSession('2026-03-02', 9, 'ring-dip', [peak]),
     });
-    expect(group(short, 'cardio').items[2].status).toBe('unmet');
+    const heavier = checkEndOfBlockTargets({
+      ...base,
+      sessionLogs: logs(set({ reps: 6, addedKg: 20, rpe: 8 }), set({ reps: 4, addedKg: 25, rpe: 9.5 })),
+    });
+    expect(group(heavier, 'test').items[1].status).toBe('met'); // ring dip
 
-    const long = checkEndOfBlockTargets({
+    const lighter = checkEndOfBlockTargets({
       ...base,
-      sessionLogs: { s: longRunSession('2026-03-22', 11, [set({ minutes: 85, rpe: 3 })]) },
+      sessionLogs: logs(set({ reps: 6, addedKg: 20, rpe: 8 }), set({ reps: 6, addedKg: 17.5, rpe: 9.5 })),
     });
-    expect(group(long, 'cardio').items[2].status).toBe('met');
+    expect(group(lighter, 'test').items[1].status).toBe('unmet');
   });
 
-  it('marks the HIIT target met once eight intervals are logged in one session', () => {
-    const hiit = (n: number): SessionLog => ({
-      id: '2026-03-20:later',
-      date: '2026-03-20',
-      week: 11,
-      phase: 'realization',
-      day: 'fri',
-      block: 'later',
-      startedAt: '2026-03-20T17:00:00.000Z',
-      completedAt: '2026-03-20T17:30:00.000Z',
-      exercises: [{ exerciseId: 'fri-hiit-intervals', sets: Array.from({ length: n }, () => set({ seconds: 30, rpe: 9 })) }],
-      updatedAt: '2026-03-20T17:30:00.000Z',
+  it('is unknown until both week 1 and a peak week are logged', () => {
+    const onlyWeek1 = checkEndOfBlockTargets({
+      ...base,
+      sessionLogs: { a: mainSession('2026-01-05', 1, 'hspu-primary', [set({ reps: 5, rpe: 8 })]) },
     });
-    expect(group(checkEndOfBlockTargets({ ...base, sessionLogs: { s: hiit(7) } }), 'cardio').items[1].status).toBe('unmet');
-    expect(group(checkEndOfBlockTargets({ ...base, sessionLogs: { s: hiit(8) } }), 'cardio').items[1].status).toBe('met');
-  });
-
-  it('marks flexibility met only when every measured chain moved the right way', () => {
-    // Three benchmarks are lower-better, three higher-better.
-    const week1 = {
-      date: '2026-01-05',
-      week: 1,
-      values: { pancakeTorso: 30, middleSplitHip: 30, frontSplitHip: 30, pikeReach: -5, shoulderLiftOff: 10, bridgeShoulder: 0 },
-      updatedAt: '2026-01-05T12:00:00.000Z',
-    };
-    const improved = {
-      date: '2026-03-23',
-      week: 12,
-      values: { pancakeTorso: 20, middleSplitHip: 22, frontSplitHip: 25, pikeReach: 2, shoulderLiftOff: 16, bridgeShoulder: 5 },
-      updatedAt: '2026-03-23T12:00:00.000Z',
-    };
-    const met = checkEndOfBlockTargets({ ...base, benchmarkEntries: { '1': week1, '12': improved } });
-    expect(group(met, 'flexibility').items[0].status).toBe('met');
-
-    // One chain going the wrong way is enough to fail it.
-    const regressed = { ...improved, values: { ...improved.values, pancakeTorso: 32 } };
-    const unmet = checkEndOfBlockTargets({ ...base, benchmarkEntries: { '1': week1, '12': regressed } });
-    expect(group(unmet, 'flexibility').items[0].status).toBe('unmet');
+    expect(group(onlyWeek1, 'test').items[0].status).toBe('unknown');
   });
 });

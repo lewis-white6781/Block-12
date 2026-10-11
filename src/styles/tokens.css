@@ -6,15 +6,15 @@
   --text: #e8edf2;
   --muted: #8a96a6;
 
-  /* phase accents — the signature. v5.0: one arc, so the hues run cool -> warm
-     from re-entry to realization, drop to violet for the week-6 deload, and
-     settle on blue for the week-12 consolidation. */
-  --reentry: #6e8ba8; /* cool slate  */
-  --accumulation: #4fa88b; /* green       */
+  /* phase accents — the signature. v6.0: the hues run cool -> warm through
+     the three builds to the peak, drop to violet for the week-5 deload, and
+     settle on blue for the Christmas floor fortnight. */
+  --build1: #6e8ba8; /* cool slate  */
+  --build2: #4fa88b; /* green       */
   --deload: #7e7bb5; /* violet      */
-  --intensification: #c9a227; /* amber       */
-  --realization: #d4553b; /* red-orange  */
-  --consolidation: #4f8fc0; /* blue        */
+  --build3: #c9a227; /* amber       */
+  --peak: #d4553b; /* red-orange  */
+  --christmas: #4f8fc0; /* blue        */
 
   --warn: #e0a030;
   --bad: #d4553b;

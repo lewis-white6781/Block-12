@@ -13,20 +13,18 @@ import { buildWeeklyReview } from '../../domain/review';
 describe('generateDemoState', () => {
   const state = generateDemoState();
 
-  it('produces 8 weeks of sessions across all three blocks, and daily entries', () => {
-    for (const block of ['main', 'am', 'later'] as const) {
-      expect(
-        Object.values(state.sessionLogs).filter((s) => s.block === block).length,
-        block,
-      ).toBeGreaterThan(0);
-    }
+  it('produces 8 weeks of main sessions, and daily entries with tick boxes', () => {
+    // v6.0 prescribes main sessions only: Upper A, Upper B, Mobility + Core, Lower.
+    expect(Object.values(state.sessionLogs).filter((s) => s.block === 'main')).toHaveLength(4 * 8);
     expect(Object.keys(state.dailyEntries).length).toBe(56);
+    expect(Object.values(state.dailyEntries).some((e) => e.checks?.['handstand-mobility'])).toBe(true);
+    expect(Object.values(state.dailyEntries).some((e) => e.checks?.football)).toBe(true);
   });
 
   it('fires the stagnation detector for the deliberately flat exercise', () => {
-    // Weeks 4 and 8 are deloads, where the stagnation detector is intentionally
+    // Week 5 is the deload, where the stagnation detector is intentionally
     // suppressed (SPEC.md 6.7) — check a loading week instead.
-    const week = 5;
+    const week = 7;
     const review = buildWeeklyReview({
       week,
       settings: state.settings,
