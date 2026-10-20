@@ -43,6 +43,13 @@ interface StoreActions {
   /** Creates the session if it doesn't already exist; otherwise leaves it untouched. */
   startSession: (params: StartSessionParams) => string;
   logSet: (sessionId: string, exerciseId: string, setLog: SetLog) => void;
+  /** Patches the variant/assistance of an already-logged set — a fix for a mis-tap (SPEC-V6.1.md section 2). */
+  updateSetVariant: (
+    sessionId: string,
+    exerciseId: string,
+    setId: string,
+    patch: Pick<SetLog, 'variantId' | 'assistanceTier'>,
+  ) => void;
   /** Toggles a single-set completion marker for an untracked AM checklist item. */
   toggleAmChecklistItem: (exerciseId: string, params: StartSessionParams) => void;
   completeSession: (sessionId: string, patch?: { sessionRpe?: number; note?: string }) => void;
@@ -147,6 +154,18 @@ export const useStore = create<StoreState>()(
                 e.exerciseId === exerciseId ? { ...e, sets: [...e.sets, setLog] } : e,
               )
             : [...session.exercises, { exerciseId, sets: [setLog] }];
+          return { sessionLogs: { ...s.sessionLogs, [sessionId]: { ...session, exercises, updatedAt: new Date().toISOString() } } };
+        }),
+
+      updateSetVariant: (sessionId, exerciseId, setId, patch) =>
+        set((s) => {
+          const session = s.sessionLogs[sessionId];
+          if (!session) return {};
+          const exercises: ExerciseLog[] = session.exercises.map((e) =>
+            e.exerciseId === exerciseId
+              ? { ...e, sets: e.sets.map((x) => (x.id === setId ? { ...x, ...patch } : x)) }
+              : e,
+          );
           return { sessionLogs: { ...s.sessionLogs, [sessionId]: { ...session, exercises, updatedAt: new Date().toISOString() } } };
         }),
 

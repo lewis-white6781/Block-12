@@ -7,14 +7,17 @@ import {
   bestKindFor,
   bestOf,
   bestOverall,
+  buildPlainHistory,
   compareBests,
+  hardestVariantSets,
+  qualifyingSetBests,
   formatBest,
   setValue,
   trend,
   trendArrow,
 } from '../performance';
 import type { Best } from '../performance';
-import type { Exercise, SessionLog, SetLog } from '../types';
+import type { Exercise, Ladder, SessionLog, SetLog } from '../types';
 
 function exercise(over: Partial<Exercise> = {}): Exercise {
   return {
@@ -293,5 +296,68 @@ describe('trendArrow', () => {
     expect(trendArrow('up')).toBe('↑');
     expect(trendArrow('flat')).toBe('→');
     expect(trendArrow('down')).toBe('↓');
+  });
+});
+
+// SPEC-V6.1.md: one session can mix variants set by set.
+describe('mixed variants within a session', () => {
+  const fl = exercise({ metric: 'hold', ladderId: 'frontLever' });
+  const ladder: Ladder = {
+    id: 'frontLever',
+    variants: [
+      { id: 'tuck', label: 'tuck', level: 0 },
+      { id: 'one-leg', label: 'one-leg', level: 3 },
+      { id: 'straddle', label: 'straddle', level: 6 },
+    ],
+    assistanceTiers: ['none', 'light band', 'medium band', 'heavy band'],
+  };
+  const mixed = [
+    set({ id: 'a', seconds: 5, variantId: 'straddle' }),
+    set({ id: 'b', seconds: 8, variantId: 'one-leg' }),
+    set({ id: 'c', seconds: 15, variantId: 'tuck' }),
+    set({ id: 'd', seconds: 4, variantId: 'straddle' }),
+  ];
+
+  it('hardestVariantSets keeps only the hardest variant used', () => {
+    expect(hardestVariantSets(mixed, ladder).map((s) => s.id)).toEqual(['a', 'd']);
+  });
+
+  it('prefers less assistance at the same variant', () => {
+    const sets = [
+      set({ id: 'a', seconds: 9, variantId: 'straddle', assistanceTier: 2 }),
+      set({ id: 'b', seconds: 4, variantId: 'straddle', assistanceTier: 1 }),
+    ];
+    expect(hardestVariantSets(sets, ladder).map((s) => s.id)).toEqual(['b']);
+  });
+
+  it('ignores a flagged hard set when choosing the variant', () => {
+    const sets = [
+      set({ id: 'a', seconds: 3, variantId: 'straddle', techniqueFlags: ['hipsSagged'] }),
+      set({ id: 'b', seconds: 8, variantId: 'one-leg' }),
+    ];
+    expect(hardestVariantSets(sets, ladder).map((s) => s.id)).toEqual(['b']);
+  });
+
+  it('leaves sessions with no recorded variant unchanged', () => {
+    const sets = [set({ id: 'a', seconds: 5 }), set({ id: 'b', seconds: 7 })];
+    expect(hardestVariantSets(sets, ladder)).toEqual(sets);
+    expect(hardestVariantSets(mixed, undefined)).toEqual(mixed);
+  });
+
+  it('bestBySession reads the hardest variant, so tuck seconds do not inflate it', () => {
+    const history = bestBySession(logs(session('2026-10-12', 1, mixed)), fl);
+    expect(history[0].best).toMatchObject({ value: 5, variantId: 'straddle' });
+    expect(bestBySession(logs(session('2026-10-12', 1, mixed)), fl, 'all')[0].best.value).toBe(15);
+  });
+
+  it('buildPlainHistory only scores the hardest-variant sets', () => {
+    expect(buildPlainHistory(logs(session('2026-10-12', 1, mixed)), fl).map((r) => r.score)).toEqual([5, 4]);
+  });
+
+  it('bestByVariant over qualifyingSetBests keeps every variant from one session', () => {
+    const groups = bestByVariant(qualifyingSetBests(logs(session('2026-10-12', 1, mixed)), fl));
+    expect(groups.get('straddle:0')?.value).toBe(5);
+    expect(groups.get('one-leg:0')?.value).toBe(8);
+    expect(groups.get('tuck:0')?.value).toBe(15);
   });
 });

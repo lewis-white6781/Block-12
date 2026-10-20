@@ -8,13 +8,13 @@ import { lookupExercise } from '../data/exercises';
 import { ladders } from '../data/ladders';
 import { currentWeek, exercisesFor, resolvePrescription } from '../domain/phase';
 import { placeholderSetScore } from '../domain/scoring';
-import { checkStopRule } from '../domain/analysis';
+import { checkStopRule, firstSameVariantSet } from '../domain/analysis';
 import { convertWeight, fmtKg, parseWeight } from '../domain/units';
 import { roundTo } from '../domain/format';
 import { newId } from '../domain/id';
 import { runSync } from '../sync/syncEngine';
 import type { WeightUnit } from '../domain/units';
-import type { Block, Exercise, SetLog, TechniqueFlag } from '../domain/types';
+import type { Block, Exercise, Ladder, SetLog, TechniqueFlag } from '../domain/types';
 import { formatPrescription } from '../components/ExerciseCard';
 import SetLogger, { Stepper } from '../components/SetLogger';
 import NumberPad from '../components/NumberPad';
@@ -36,8 +36,32 @@ function restSecondsFor(exercise: Exercise): number {
   return 90;
 }
 
-function formatLastTime(sets: SetLog[], metric: Exercise['metric'], unit: WeightUnit): string {
+/** "straddle", "one-leg · light band", or '' when the set recorded no variant. */
+function variantLabel(set: SetLog, ladder: Ladder | undefined): string {
+  if (!ladder) return '';
+  const name = ladder.variants.find((v) => v.id === set.variantId)?.label;
+  const tier = set.assistanceTier ? ladder.assistanceTiers[set.assistanceTier] : undefined;
+  return [name, tier].filter(Boolean).join(' · ');
+}
+
+function formatLastTime(
+  sets: SetLog[],
+  metric: Exercise['metric'],
+  unit: WeightUnit,
+  ladder: Ladder | undefined,
+): string {
   if (sets.length === 0) return '—';
+  // v6.1: sets can differ in variant, so each one carries its own label —
+  // "6s straddle, 8s one-leg, 15s tuck".
+  if (ladder && sets.some((s) => variantLabel(s, ladder))) {
+    return sets
+      .map((s) => {
+        const label = variantLabel(s, ladder);
+        const head = formatLoggedSet(s, metric).replace(/ RPE [\d.]+/, '');
+        return label ? `${head} ${label}` : head;
+      })
+      .join(', ');
+  }
   if (metric === 'hold' || metric === 'timeOnly' || metric === 'attempts')
     return sets.map((s) => s.seconds ?? '—').join(',') + 's';
   if (metric === 'runInterval') return sets.map((s) => s.minutes ?? '—').join(',') + ' min';
@@ -75,6 +99,7 @@ export default function SessionRunner() {
   const settings = useStore((s) => s.settings);
   const progressionEvents = useStore((s) => s.progressionEvents);
   const addProgressionEvent = useStore((s) => s.addProgressionEvent);
+  const updateSetVariant = useStore((s) => s.updateSetVariant);
 
   const sessionId = `${params.date}:${params.block}`;
   const session = sessionLogs[sessionId];
@@ -136,6 +161,7 @@ export default function SessionRunner() {
   const [assistanceTier, setAssistanceTier] = useState<number | undefined>(undefined);
   const [romCm, setRomCm] = useState<number | undefined>(undefined);
   const [flags, setFlags] = useState<TechniqueFlag[]>([]);
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [padField, setPadField] = useState<
     null | 'reps' | 'kg' | 'distance' | 'intensity' | 'minutes' | 'rom'
   >(null);
@@ -157,8 +183,13 @@ export default function SessionRunner() {
     setRpe(prescription?.rpeLow ?? (exercise.rpeScale === 'run' ? 3 : 7));
     setDistanceM(prescription?.distanceM);
     setIntensityPct(undefined);
-    setVariantId(previous?.log.sets.at(-1)?.variantId);
-    setAssistanceTier(previous?.log.sets.at(-1)?.assistanceTier ?? 0);
+    // Variant is chosen per set (SPEC-V6.1.md section 2). It starts from the
+    // last set logged this session — so resuming mid-exercise continues where
+    // you were — else last session's final set, and then carries set to set.
+    const carry = loggedSets.at(-1) ?? previous?.log.sets.at(-1);
+    setVariantId(carry?.variantId);
+    setAssistanceTier(carry?.assistanceTier ?? 0);
+    setEditingSetId(null);
     // Depth carries forward from last session like addedKg does: it is a rig
     // setup you dial in once, not a per-set decision.
     setRomCm(previous?.log.sets.at(-1)?.romCm);
@@ -227,7 +258,7 @@ export default function SessionRunner() {
           exercise,
           set: lastLoggedSet,
           previousSetThisExercise: loggedSets.length >= 2 ? loggedSets[loggedSets.length - 2] : undefined,
-          firstSetThisSession: loggedSets.length >= 2 ? loggedSets[0] : undefined,
+          firstSetThisSession: firstSameVariantSet(loggedSets, loggedSets.length - 1),
           week: session.week,
         })
       : null;
@@ -283,7 +314,7 @@ export default function SessionRunner() {
         <div className="text-sm text-muted">TARGET {formatPrescription(prescription)}</div>
         <div className="mt-1 text-sm text-muted">
           Last time{previous ? ` (Wk${previous.session.week})` : ''}:{' '}
-          {formatLastTime(previous?.log.sets ?? [], exercise.metric, settings.weightUnit)}
+          {formatLastTime(previous?.log.sets ?? [], exercise.metric, settings.weightUnit, ladder)}
         </div>
 
         <StopRuleBanner result={stopRuleResult} />
@@ -297,40 +328,6 @@ export default function SessionRunner() {
             weekOfDate={(date) => currentWeek(parseISO(date), settings.blockStartDate)}
             onSave={addProgressionEvent}
           />
-        )}
-
-        {ladder && (
-          <div className="mt-3 flex gap-3 text-sm">
-            <label className="flex-1">
-              <span className="block text-xs text-muted">Variant</span>
-              <select
-                value={variantId ?? ''}
-                onChange={(e) => setVariantId(e.target.value || undefined)}
-                className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-2 text-text"
-              >
-                <option value="">—</option>
-                {ladder.variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex-1">
-              <span className="block text-xs text-muted">Assistance</span>
-              <select
-                value={assistanceTier ?? 0}
-                onChange={(e) => setAssistanceTier(Number(e.target.value))}
-                className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-2 text-text"
-              >
-                {ladder.assistanceTiers.map((tier, i) => (
-                  <option key={tier} value={i}>
-                    {tier}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
         )}
 
         {/* A suitcase carry progresses on load exactly like a weighted rep does —
@@ -354,11 +351,34 @@ export default function SessionRunner() {
             const isActive = i === loggedSets.length;
 
             if (logged) {
+              const label = variantLabel(logged, ladder);
+              const editing = editingSetId === logged.id;
               return (
-                <div key={i} className="flex items-center justify-between text-sm text-muted">
-                  <span>SET {i + 1}</span>
-                  <span className="tabular-nums">{formatLoggedSet(logged, exercise.metric)}</span>
-                  <span>✓</span>
+                <div key={i}>
+                  <button
+                    type="button"
+                    disabled={!ladder}
+                    onClick={() => setEditingSetId(editing ? null : logged.id)}
+                    aria-expanded={ladder ? editing : undefined}
+                    className="flex min-h-11 w-full items-center justify-between gap-2 text-left text-sm text-muted"
+                  >
+                    <span className="shrink-0">SET {i + 1}</span>
+                    <span className="flex-1 truncate text-right tabular-nums">
+                      {formatLoggedSet(logged, exercise.metric)}
+                      {label && <span className="text-text"> · {label}</span>}
+                    </span>
+                    <span>{editing ? '▴' : '✓'}</span>
+                  </button>
+                  {editing && ladder && (
+                    <div className="mb-2 rounded border border-line bg-surface p-2">
+                      <VariantPicker
+                        ladder={ladder}
+                        variantId={logged.variantId}
+                        assistanceTier={logged.assistanceTier ?? 0}
+                        onChange={(patch) => updateSetVariant(sessionId, exercise.id, logged.id, patch)}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -375,6 +395,19 @@ export default function SessionRunner() {
             return (
               <div key={i} className="rounded border border-line bg-surface p-2">
                 <div className="mb-1 text-xs uppercase tracking-wide text-muted">SET {i + 1}</div>
+                {ladder && (
+                  <div className="mb-2">
+                    <VariantPicker
+                      ladder={ladder}
+                      variantId={variantId}
+                      assistanceTier={assistanceTier ?? 0}
+                      onChange={(patch) => {
+                        setVariantId(patch.variantId);
+                        setAssistanceTier(patch.assistanceTier);
+                      }}
+                    />
+                  </div>
+                )}
                 <SetLogger
                   metric={exercise.metric}
                   rpeScale={exercise.rpeScale ?? 'strength'}
@@ -462,6 +495,53 @@ export default function SessionRunner() {
         onConfirm={setRomCm}
         onClose={() => setPadField(null)}
       />
+    </div>
+  );
+}
+
+/** Variant + assistance for ONE set — SPEC-V6.1.md section 2. */
+function VariantPicker({
+  ladder,
+  variantId,
+  assistanceTier,
+  onChange,
+}: {
+  ladder: Ladder;
+  variantId: string | undefined;
+  assistanceTier: number;
+  onChange: (patch: { variantId: string | undefined; assistanceTier: number }) => void;
+}) {
+  return (
+    <div className="flex gap-3 text-sm">
+      <label className="flex-1">
+        <span className="block text-xs text-muted">Variant</span>
+        <select
+          value={variantId ?? ''}
+          onChange={(e) => onChange({ variantId: e.target.value || undefined, assistanceTier })}
+          className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-2 text-text"
+        >
+          <option value="">—</option>
+          {ladder.variants.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex-1">
+        <span className="block text-xs text-muted">Assistance</span>
+        <select
+          value={assistanceTier}
+          onChange={(e) => onChange({ variantId, assistanceTier: Number(e.target.value) })}
+          className="mt-1 min-h-11 w-full rounded border border-line bg-surface-2 px-2 text-text"
+        >
+          {ladder.assistanceTiers.map((tier, i) => (
+            <option key={tier} value={i}>
+              {tier}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

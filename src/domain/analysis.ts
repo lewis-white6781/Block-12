@@ -1,6 +1,6 @@
 // Stop-rule check, stagnation detector, one-variable rule, tendon guardrails —
 // SPEC.md sections 6.6–6.8, 6.11.
-import { setValue } from './performance';
+import { sameVariant, setValue } from './performance';
 import { weekRpeCap } from './phase';
 import { bestQualifyingScore } from './scoring';
 import type { DatedSetScore } from './scoring';
@@ -79,12 +79,24 @@ export interface StopRuleContext {
   /** The set logged immediately before it in this session (for consecutive-collapse detection). */
   previousSetThisExercise: SetLog | undefined;
   /**
-   * The FIRST working set of this exercise in this session — the baseline
-   * SPEC-V4.0.md section 7's Performance Drop Rule measures against. Undefined
-   * when the set being checked is itself the first.
+   * The FIRST working set of this exercise in this session AT THE SAME
+   * VARIANT AND ASSISTANCE — the baseline SPEC-V4.0.md section 7's Performance
+   * Drop Rule measures against (SPEC-V6.1.md section 4: a straddle set is never
+   * judged against a tuck set). Undefined when the set being checked is the
+   * first at its variant. Build it with firstSameVariantSet.
    */
   firstSetThisSession: SetLog | undefined;
   week: number;
+}
+
+/**
+ * The earliest set before `index` done at the same variant/assistance as
+ * `sets[index]`, or undefined if `sets[index]` is the first at that variant.
+ */
+export function firstSameVariantSet(sets: SetLog[], index: number): SetLog | undefined {
+  const target = sets[index];
+  if (!target) return undefined;
+  return sets.slice(0, index).find((s) => sameVariant(s, target));
 }
 
 export function checkStopRule(ctx: StopRuleContext): StopRuleResult | null {
@@ -163,7 +175,7 @@ export function weeklyStopRuleFirings(
           exercise,
           set: log.sets[i],
           previousSetThisExercise: i > 0 ? log.sets[i - 1] : undefined,
-          firstSetThisSession: i > 0 ? log.sets[0] : undefined,
+          firstSetThisSession: firstSameVariantSet(log.sets, i),
           week: session.week,
         });
         if (result) firings.push({ exerciseId: exercise.id, result });

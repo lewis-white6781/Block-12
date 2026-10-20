@@ -318,7 +318,7 @@ function bestInWeeks(
   weeks: number[],
 ): Best | null {
   return bestOf(
-    bestBySession(sessionLogs, exercise)
+    bestBySession(sessionLogs, exercise, 'all')
       .filter((h) => weeks.includes(h.week))
       .map((h) => h.best),
   );

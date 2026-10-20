@@ -13,6 +13,7 @@ import {
   bestAsOf,
   bestByVariant,
   bestBySession,
+  qualifyingSetBests,
   bestByWeek,
   bestOverall,
   formatBest,
@@ -206,7 +207,7 @@ export default function Progress() {
           trend: trend(history),
           variantLabel: variantLabel(current),
           weekly: bestByWeek(history),
-          variants: Array.from(bestByVariant(history).entries()).map(([key, best]) => ({
+          variants: Array.from(bestByVariant(qualifyingSetBests(sessionLogs, exercise)).entries()).map(([key, best]) => ({
             key,
             label: variantLabel(best) ?? 'no variant',
             tier: best.assistanceTier ?? 0,

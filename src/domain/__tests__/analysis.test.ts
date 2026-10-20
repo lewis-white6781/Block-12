@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkStopRule,
+  firstSameVariantSet,
   churnGuardrails,
   collapseTrainingGuardrails,
   detectStagnation,
@@ -380,5 +381,36 @@ describe('tendon guardrails (6.11)', () => {
     };
     const result = collapseTrainingGuardrails(sessionLogs, [flHold], 3);
     expect(result).toHaveLength(1);
+  });
+});
+
+// SPEC-V6.1.md section 4: the 15% drop compares like with like.
+describe('firstSameVariantSet', () => {
+  const sets = [
+    set({ id: 'a', seconds: 15, variantId: 'tuck' }),
+    set({ id: 'b', seconds: 5, variantId: 'straddle' }),
+    set({ id: 'c', seconds: 4, variantId: 'straddle' }),
+    set({ id: 'd', seconds: 6, variantId: 'straddle', assistanceTier: 1 }),
+  ];
+
+  it('returns the first earlier set at the same variant and assistance', () => {
+    expect(firstSameVariantSet(sets, 2)?.id).toBe('b');
+  });
+
+  it('is undefined for the first set at a variant', () => {
+    expect(firstSameVariantSet(sets, 0)).toBeUndefined();
+    expect(firstSameVariantSet(sets, 1)).toBeUndefined();
+    expect(firstSameVariantSet(sets, 3)).toBeUndefined();
+  });
+
+  it('a harder variant after an easy one does not fire the drop rule', () => {
+    const result = checkStopRule({
+      exercise: exercise({ metric: 'hold' }),
+      set: sets[1],
+      previousSetThisExercise: sets[0],
+      firstSetThisSession: firstSameVariantSet(sets, 1),
+      week: 1,
+    });
+    expect(result).toBeNull();
   });
 });

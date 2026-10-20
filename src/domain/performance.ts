@@ -8,9 +8,10 @@
 // and a genuine rep PR at an easier variant looked like regression.
 //
 // Variant and assistance are handled by GROUPING instead — see bestByVariant.
-import { buildExerciseHistory, isQualifyingSet } from './scoring';
+import { ladders } from '../data/ladders';
+import { isQualifyingSet } from './scoring';
 import type { DatedSetScore } from './scoring';
-import type { Exercise, SessionLog, SetLog } from './types';
+import type { Exercise, Ladder, SessionLog, SetLog } from './types';
 
 /** Fractional improvement below which two bests count as the same. SPEC.md 6.6. */
 export const FLAT_THRESHOLD = 1.03;
@@ -93,17 +94,68 @@ export function plainScore(metric: Exercise['metric'], set: SetLog): number {
 }
 
 /**
+ * v6.1 (SPEC-V6.1.md section 3): sets within one session may use different
+ * variants — straddle, then one-leg, then tuck. Anything that needs ONE number
+ * per session (trend arrow, stagnation detector, session best) reads only the
+ * sets at the HARDEST variant/assistance used that session, so easier back-off
+ * sets can't inflate the figure and hide a stalled hard variant.
+ *
+ * Hardest = highest ladder `level`, then lowest assistance tier. The variant
+ * is chosen from qualifying sets (a flagged straddle set doesn't make the
+ * session "a straddle session"), falling back to all sets if none qualify.
+ * Sets with no variant rank below every ladder variant; a session that never
+ * recorded one is returned unchanged, so pre-v6.1 history reads as before.
+ */
+export function hardestVariantSets(sets: SetLog[], ladder: Ladder | undefined): SetLog[] {
+  if (!ladder || sets.length === 0) return sets;
+  const rank = (set: SetLog): [number, number] => {
+    const level = ladder.variants.find((v) => v.id === set.variantId)?.level ?? -1;
+    return [level, -(set.assistanceTier ?? 0)];
+  };
+  const pool = sets.some(isQualifyingSet) ? sets.filter(isQualifyingSet) : sets;
+  const top = pool.reduce<[number, number]>((best, set) => {
+    const [l, t] = rank(set);
+    return l > best[0] || (l === best[0] && t > best[1]) ? [l, t] : best;
+  }, rank(pool[0]));
+  return sets.filter((set) => {
+    const [l, t] = rank(set);
+    return l === top[0] && t === top[1];
+  });
+}
+
+/** True when two sets were done at the same variant and assistance tier. */
+export function sameVariant(a: SetLog, b: SetLog): boolean {
+  return (a.variantId ?? '') === (b.variantId ?? '') && (a.assistanceTier ?? 0) === (b.assistanceTier ?? 0);
+}
+
+function ladderFor(exercise: Exercise): Ladder | undefined {
+  return exercise.ladderId ? ladders.find((l) => l.id === exercise.ladderId) : undefined;
+}
+
+/**
  * Every logged set for one exercise as a plain-scored history, oldest first —
- * the shape SPEC.md 6.6's stagnation detector consumes. Replaces the
- * `buildExerciseHistory(..., computeSetScore(...))` pairing, which needed a
- * bodyweight lookup threaded through every call site purely to feed a
- * multiplier that no longer exists.
+ * the shape SPEC.md 6.6's stagnation detector consumes. Only each session's
+ * hardest-variant sets are included (see hardestVariantSets).
  */
 export function buildPlainHistory(
   sessionLogs: Record<string, SessionLog>,
   exercise: Exercise,
 ): DatedSetScore[] {
-  return buildExerciseHistory(sessionLogs, exercise.id, (set) => plainScore(exercise.metric, set));
+  const ladder = ladderFor(exercise);
+  const rows: DatedSetScore[] = [];
+  for (const session of Object.values(sessionLogs)) {
+    const log = session.exercises.find((e) => e.exerciseId === exercise.id);
+    if (!log) continue;
+    for (const set of hardestVariantSets(log.sets, ladder)) {
+      rows.push({
+        date: session.date,
+        week: session.week,
+        score: plainScore(exercise.metric, set),
+        qualifies: isQualifyingSet(set),
+      });
+    }
+  }
+  return rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
 /**
@@ -165,16 +217,23 @@ export interface SessionBest {
  * exercise was logged but nothing qualified are omitted entirely rather than
  * recorded as zero — a session of flagged sets is missing data, not a bad
  * result.
+ *
+ * `scope: 'hardest'` (the default) takes the best from the session's
+ * hardest-variant sets only — SPEC-V6.1.md section 3. `'all'` considers every
+ * set, for target checks that accept any of several variants.
  */
 export function bestBySession(
   sessionLogs: Record<string, SessionLog>,
   exercise: Exercise,
+  scope: 'hardest' | 'all' = 'hardest',
 ): SessionBest[] {
+  const ladder = ladderFor(exercise);
   const out: SessionBest[] = [];
   for (const session of Object.values(sessionLogs)) {
     const log = session.exercises.find((e) => e.exerciseId === exercise.id);
     if (!log) continue;
-    const candidates = log.sets
+    const sets = scope === 'hardest' ? hardestVariantSets(log.sets, ladder) : log.sets;
+    const candidates = sets
       .filter(isQualifyingSet)
       .map((set) => toBest(exercise, set, session.date, session.week))
       .filter((b): b is Best => b !== null);
@@ -192,7 +251,29 @@ export function bestByWeek(history: SessionBest[]): (Best | null)[] {
 }
 
 /**
- * Bests grouped by `variantId:assistanceTier`.
+ * Every qualifying set as its own entry, oldest first — the input bestByVariant
+ * needs now that one session can hold several variants (SPEC-V6.1.md section
+ * 3). A per-session best would keep only one variant per session.
+ */
+export function qualifyingSetBests(
+  sessionLogs: Record<string, SessionLog>,
+  exercise: Exercise,
+): SessionBest[] {
+  const out: SessionBest[] = [];
+  for (const session of Object.values(sessionLogs)) {
+    const log = session.exercises.find((e) => e.exerciseId === exercise.id);
+    if (!log) continue;
+    for (const set of log.sets.filter(isQualifyingSet)) {
+      const best = toBest(exercise, set, session.date, session.week);
+      if (best) out.push({ date: session.date, week: session.week, best });
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Bests grouped by `variantId:assistanceTier`. Feed it qualifyingSetBests,
+ * not bestBySession, or mixed-variant sessions lose their easier variants.
  *
  * This is how variant difficulty is handled now: like is compared with like,
  * and a set at "light band" is never numerically weighed against a set at
