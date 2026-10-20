@@ -5,10 +5,10 @@ block is **Cut to New Year**: Upper A / Rest / Football / Upper B / Football /
 Mobility + Core / Lower, with a bodyweight-keyed nutrition table.
 
 The specification is in **./SPEC.md** plus its amendments **./SPEC-V1.1.md**,
-**./SPEC-V2.0.md**, **./SPEC-V3.0.md**, **./SPEC-V4.0.md**, **./SPEC-V5.0.md** and
-**./SPEC-V6.0.md**. All seven are authoritative and must be read together. Where
-they conflict, the newest amendment wins — V6.0 over V5.0 over V4.0 over V3.0 over
-V2.0 over V1.1 over SPEC.md. Each amendment's own §1 lists every line it
+**./SPEC-V2.0.md**, **./SPEC-V3.0.md**, **./SPEC-V4.0.md**, **./SPEC-V5.0.md**,
+**./SPEC-V6.0.md** and **./SPEC-V6.1.md**. All eight are authoritative and must be
+read together. Where they conflict, the newest amendment wins — V6.1 over V6.0 over
+V5.0 over V4.0 over V3.0 over V2.0 over V1.1 over SPEC.md. Each amendment's own §1 lists every line it
 supersedes. If code and spec disagree, the spec wins; if the spec is ambiguous,
 ask before inventing.
 
@@ -18,7 +18,7 @@ document wins. (./updatedblock20.md and
 ./12_week_hybrid_marathon_calisthenics_plan.md stay in the repo for the retired
 records' provenance only.)
 
-Current version: 6.0.0 — the Cut to New Year block, day 1 Sunday 11 Oct 2026.
+Current version: 6.1.0 — the Cut to New Year block, day 1 Sunday 11 Oct 2026.
 Gym sessions all sit in the `main` slot; handstand + mobility (daily) and football
 (Wed/Fri) are tick boxes on `DailyEntry.checks`; nutrition targets come from
 src/data/nutrition.ts with a weekly calorie check in src/domain/nutrition.ts.
@@ -67,6 +67,9 @@ Schema v8 wiped the previous block. See SPEC-V6.0.md and CHANGELOG.md.
   nutrition maths is in src/domain/nutrition.ts.
 - Ladders: a variant `id` is NEVER renamed or removed (it is stored in SetLog.variantId).
   `level` and array order carry no stored data and may be rebuilt freely.
+- Variant + assistance are chosen PER SET (SPEC-V6.1.md). Anything needing one
+  number per session reads `hardestVariantSets`; the drop rule compares against
+  `firstSameVariantSet`; `bestByVariant` takes `qualifyingSetBests`.
 - No unitless numbers in the UI. The Difficulty Index and Exercise Progress Index were
   deleted in v3.0 — every displayed figure is in the movement's own unit (reps, seconds,
   kg, cm). Variant difficulty is a GROUPING key (src/domain/performance.ts's

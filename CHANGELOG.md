@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-10-19
+
+Per-set progressions. See SPEC-V6.1.md.
+
+### Changed
+
+- **Variant and assistance are picked per set** in the Session Runner, inside
+  each set's card, carrying forward from the previous set. Logged sets show
+  their variant, and tapping one lets you correct it.
+- "Last time" shows each set's variant.
+- The 15% drop warning compares a set only with the first set at the same
+  variant and assistance.
+- Trend arrows, session bests and the stagnation warning read the hardest
+  variant used in each session, so easier back-off sets don't mask a stall.
+- Progress's best-per-variant list keeps every variant trained in a session.
+
+No data migration — existing logs are unchanged.
+
 ## [6.0.0] - 2026-10-11
 
 The Cut to New Year block. A new 12-week plan starting Sunday 11 October 2026,
